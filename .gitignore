@@ -427,3 +427,6 @@ FodyWeavers.xsd
 *.msix
 *.msm
 *.msp
+# Local backups
+services/api-gateway-nestjs-old/
+services/auth-service-old/
