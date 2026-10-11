@@ -1,0 +1,5 @@
+com\doan\content_service\ContentServiceApplication.class
+com\doan\content_service\model\Content.class
+com\doan\content_service\controller\ContentController.class
+com\doan\content_service\dto\ContentRequest.class
+com\doan\content_service\repository\ContentRepository.class
