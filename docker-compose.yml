@@ -1,0 +1,56 @@
+version: '3.8'
+
+services:
+  api-gateway:
+    build:
+      context: ./services/api-gateway
+    ports:
+      - "3000:3000"
+    environment:
+      TTS_SERVICE_URL: http://tts-service:3003
+    depends_on:
+      - auth-service
+      - tts-service
+      - mongodb
+
+  auth-service:
+    build:
+      context: ./services/auth-service
+    ports:
+      - "3004:3004"
+    depends_on:
+      - mongodb
+
+  tts-service:
+    build:
+      context: ./services/tts-service
+    ports:
+      - "3003:3003"
+
+  content-service:
+    build: 
+      context: ./services/content-service
+    ports:
+      - "3001:3001" # Changed to port 3001 to avoid conflicting with auth-service
+    depends_on:
+      - mongodb
+    restart: always
+
+  translation-service:
+    build: 
+      context: ./services/translation-service
+    ports:
+      - "3005:3005"
+    depends_on:
+      - mongodb
+    restart: always
+
+  mongodb:
+    image: mongo:latest
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+
+volumes:
+  mongo_data:
