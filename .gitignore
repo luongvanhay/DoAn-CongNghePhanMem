@@ -430,3 +430,5 @@ FodyWeavers.xsd
 # Local backups
 services/api-gateway-nestjs-old/
 services/auth-service-old/
+*.mv.db
+*.trace.db
