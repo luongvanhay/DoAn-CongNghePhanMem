@@ -67,11 +67,17 @@ public class TranslationController {
                     "target", target,
                     "provider", "LibreTranslate"
             );
-        } catch (ResponseStatusException ex) {
+        } 
+        
+        catch (ResponseStatusException ex) {
             throw ex;
         } catch (Exception ex) {
-            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY,
-                    "Không gọi được dịch vụ dịch. Hãy kiểm tra URL, kết nối mạng và API key.");
-        }
+    System.err.println("Loi khi goi LibreTranslate: "
+            + ex.getClass().getSimpleName()
+            + " - " + ex.getMessage());
+
+    throw new ResponseStatusException(HttpStatus.BAD_GATEWAY,
+            "Không gọi được dịch vụ dịch: " + ex.getMessage());
+}
     }
 }

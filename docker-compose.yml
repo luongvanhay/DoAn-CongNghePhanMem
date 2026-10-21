@@ -4,15 +4,26 @@ services:
       context: ./services/api-gateway
     ports:
       - "3000:3000"
+    environment:
+      - JWT_SECRET=${JWT_SECRET}
+      - AUTH_SERVICE_URL=http://auth-service:3004
+      - CONTENT_SERVICE_URL=http://content-service:3001
+      - TRANSLATION_SERVICE_URL=http://translation-service:3002
+      - TTS_SERVICE_URL=http://tts-service:3003
     depends_on:
       - auth-service
-      - mongodb
+      - content-service
+      - translation-service
+      - tts-service
 
   auth-service:
     build:
       context: ./services/auth-service
     ports:
       - "3004:3004"
+    environment:
+      - JWT_SECRET=${JWT_SECRET}
+      - MONGODB_URI=mongodb://mongodb:27017/auth_db
     depends_on:
       - mongodb
 
@@ -23,25 +34,25 @@ services:
       - "3003:3003"
 
   content-service:
-    build: 
+    build:
       context: ./services/content-service
     ports:
       - "3001:3001"
-    depends_on:
-      - mongodb
+    environment:
+      - JWT_SECRET=${JWT_SECRET}
+    volumes:
+      - content_data:/app/data
     restart: always
 
   translation-service:
-    build: 
+    build:
       context: ./services/translation-service
     ports:
-      - "3005:3005"
-    depends_on:
-      - mongodb
+      - "3002:3002"
     restart: always
 
   mongodb:
-    image: mongo:latest
+    image: mongo:8
     ports:
       - "27017:27017"
     volumes:
@@ -49,3 +60,4 @@ services:
 
 volumes:
   mongo_data:
+  content_data:

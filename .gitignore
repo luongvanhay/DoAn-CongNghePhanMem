@@ -432,3 +432,8 @@ services/api-gateway-nestjs-old/
 services/auth-service-old/
 *.mv.db
 *.trace.db
+.env
+
+# Maven build output
+**/target/
+**/effective-pom
