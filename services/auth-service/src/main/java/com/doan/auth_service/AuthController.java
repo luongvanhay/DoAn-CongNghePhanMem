@@ -113,7 +113,24 @@ public class AuthController {
                     )
             );
         }
+System.out.println("Login username: " + request.getUsername().trim());
 
+userRepository.findByUsername(request.getUsername().trim())
+        .ifPresentOrElse(
+                user -> {
+                    System.out.println("User found: true");
+                    System.out.println("Role: " + user.getRole());
+                    System.out.println("Status: " + user.getStatus());
+                    System.out.println(
+                            "Password matches: "
+                                    + passwordEncoder.matches(
+                                            request.getPassword(),
+                                            user.getPassword()
+                                    )
+                    );
+                },
+                () -> System.out.println("User found: false")
+        );
         return userRepository.findByUsername(
                 request.getUsername().trim()
         ).filter(user ->

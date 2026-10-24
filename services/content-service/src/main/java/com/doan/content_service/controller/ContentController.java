@@ -2,7 +2,9 @@
 package com.doan.content_service.controller;
 
 import com.doan.content_service.dto.ContentRequest;
+import com.doan.content_service.dto.TranslationRequest;
 import com.doan.content_service.model.Content;
+import com.doan.content_service.model.ContentTranslation;
 import com.doan.content_service.repository.ContentRepository;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
@@ -10,9 +12,13 @@ import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.regex.Pattern;
 
 @RestController
 @RequestMapping
@@ -35,7 +41,7 @@ public class ContentController {
     }
 
     @GetMapping("/contents/{id}")
-    public Content getById(@PathVariable Long id) {
+    public Content getById(@PathVariable String id) {
         return findContent(id);
     }
 
@@ -90,7 +96,7 @@ public class ContentController {
 
     @PutMapping("/contents/{id}")
     public Content update(
-            @PathVariable Long id,
+            @PathVariable String id,
             @Valid @RequestBody ContentRequest request,
             HttpServletRequest httpRequest) {
 
@@ -105,7 +111,7 @@ public class ContentController {
     @DeleteMapping("/contents/{id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void delete(
-            @PathVariable Long id,
+            @PathVariable String id,
             HttpServletRequest httpRequest) {
 
         Content content = findContent(id);
@@ -113,7 +119,60 @@ public class ContentController {
         repository.delete(content);
     }
 
-    private Content findContent(Long id) {
+    // Thêm hoặc cập nhật MỘT bản dịch (mã ngôn ngữ lấy từ URL).
+    @PutMapping("/contents/{id}/translations/{lang}")
+    public Content upsertTranslation(
+            @PathVariable String id,
+            @PathVariable String lang,
+            @Valid @RequestBody TranslationRequest request,
+            HttpServletRequest httpRequest) {
+
+        Content content = findContent(id);
+        checkOwnerOrAdmin(content, httpRequest);
+
+        String code = normalizeLanguage(lang);
+
+        if (code.equals(content.getSourceLanguage())) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Đây là ngôn ngữ gốc, hãy sửa trực tiếp nội dung chính");
+        }
+
+        List<ContentTranslation> list =
+                new ArrayList<>(content.getTranslations());
+        list.removeIf(t -> code.equals(t.getLanguageCode()));
+        list.add(toTranslation(code, request));
+        content.setTranslations(list);
+
+        return repository.save(content);
+    }
+
+    // Xóa MỘT bản dịch.
+    @DeleteMapping("/contents/{id}/translations/{lang}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void deleteTranslation(
+            @PathVariable String id,
+            @PathVariable String lang,
+            HttpServletRequest httpRequest) {
+
+        Content content = findContent(id);
+        checkOwnerOrAdmin(content, httpRequest);
+
+        String code = normalizeLanguage(lang);
+
+        List<ContentTranslation> list =
+                new ArrayList<>(content.getTranslations());
+
+        if (!list.removeIf(t -> code.equals(t.getLanguageCode()))) {
+            throw new ResponseStatusException(
+                    HttpStatus.NOT_FOUND, "Không tìm thấy bản dịch");
+        }
+
+        content.setTranslations(list);
+        repository.save(content);
+    }
+
+    private Content findContent(String id) {
         return repository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(
                         HttpStatus.NOT_FOUND, "Khong tim thay noi dung"));
@@ -192,5 +251,68 @@ public class ContentController {
 
         content.setAudioPriority(request.getAudioPriority());
         content.setActive(request.getActive());
+
+        // null = giữ nguyên bản dịch hiện có
+        if (request.getTranslations() != null) {
+            List<ContentTranslation> list = new ArrayList<>();
+
+            for (TranslationRequest item : request.getTranslations()) {
+                list.add(toTranslation(
+                        normalizeLanguage(item.getLanguageCode()), item));
+            }
+
+            content.setTranslations(list);
+        }
+
+        validateTranslations(content);
+    }
+
+    private static final Pattern LANGUAGE_PATTERN =
+            Pattern.compile("^[a-z]{2,3}(-[a-z0-9]{2,8})?$");
+
+    private String normalizeLanguage(String value) {
+        String code = value == null ? "" : value.trim().toLowerCase();
+
+        if (!LANGUAGE_PATTERN.matcher(code).matches()) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Mã ngôn ngữ không hợp lệ (ví dụ: en, zh, zh-cn)");
+        }
+
+        return code;
+    }
+
+    private ContentTranslation toTranslation(
+            String code, TranslationRequest request) {
+
+        return new ContentTranslation(
+                code,
+                request.getTitle().trim(),
+                request.getDescription().trim(),
+                request.getAudioUrl() == null
+                        || request.getAudioUrl().isBlank()
+                        ? null : request.getAudioUrl().trim());
+    }
+
+    // Không trùng ngôn ngữ giữa các bản dịch và không trùng ngôn ngữ gốc.
+    private void validateTranslations(Content content) {
+        Set<String> seen = new HashSet<>();
+
+        for (ContentTranslation t : content.getTranslations()) {
+            String code = t.getLanguageCode();
+
+            if (code.equals(content.getSourceLanguage())) {
+                throw new ResponseStatusException(
+                        HttpStatus.BAD_REQUEST,
+                        "Bản dịch '" + code
+                                + "' trùng với ngôn ngữ gốc của nội dung");
+            }
+
+            if (!seen.add(code)) {
+                throw new ResponseStatusException(
+                        HttpStatus.BAD_REQUEST,
+                        "Ngôn ngữ '" + code + "' bị khai báo nhiều lần");
+            }
+        }
     }
 }

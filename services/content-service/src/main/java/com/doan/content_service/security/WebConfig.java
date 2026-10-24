@@ -19,7 +19,8 @@ public class WebConfig implements WebMvcConfigurer {
         registry.addInterceptor(jwtInterceptor)
                 .addPathPatterns(
                         "/contents",
-                        "/contents/**"
+                        "/contents/**",
+                        "/payments/*/confirm-cash"
                 );
     }
 }

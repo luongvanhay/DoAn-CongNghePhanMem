@@ -40,8 +40,9 @@ services:
       - "3001:3001"
     environment:
       - JWT_SECRET=${JWT_SECRET}
-    volumes:
-      - content_data:/app/data
+      - MONGODB_URI=mongodb://mongodb:27017/content_db
+    depends_on:
+      - mongodb
     restart: always
 
   translation-service:
@@ -60,4 +61,3 @@ services:
 
 volumes:
   mongo_data:
-  content_data:

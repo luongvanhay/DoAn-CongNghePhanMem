@@ -1,5 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { getContents } from "./services/contentService";
+import AdminDashboard from "./pages/Admin/AdminDashboard";
 import {
   MapContainer,
   TileLayer,
@@ -39,6 +40,29 @@ function mapApiPlace(item) {
     description: item.body || "Chưa có nội dung thuyết minh.",
     position: [Number(item.latitude), Number(item.longitude)],
     icon: "📍",
+    sourceLanguage: item.sourceLanguage || "vi",
+    translations: Array.isArray(item.translations) ? item.translations : [],
+  };
+}
+
+// Chọn tên/mô tả theo ngôn ngữ đang chọn; không có bản dịch thì dùng nội dung gốc.
+function localizePlace(place, language) {
+  if (!language || language === place.sourceLanguage) {
+    return place;
+  }
+
+  const translation = place.translations.find(
+    (item) => item.languageCode === language,
+  );
+
+  if (!translation) {
+    return place;
+  }
+
+  return {
+    ...place,
+    name: translation.title || place.name,
+    description: translation.description || place.description,
   };
 }
 
@@ -61,10 +85,23 @@ function MapController({ place, userPosition }) {
   return null;
 }
 
-function App() {
-  const [places, setPlaces] = useState([]);
-  const [selected, setSelected] = useState(null);
+function MapApp() {
+  const [rawPlaces, setRawPlaces] = useState([]);
+  const [selectedRaw, setSelected] = useState(null);
   const [language, setLanguage] = useState("vi");
+
+  // Danh sách và POI đang chọn, đã áp dụng ngôn ngữ hiện tại.
+  const places = useMemo(
+    () => rawPlaces.map((place) => localizePlace(place, language)),
+    [rawPlaces, language],
+  );
+  const selected = useMemo(
+    () =>
+      selectedRaw
+        ? places.find((place) => place.id === selectedRaw.id) || selectedRaw
+        : null,
+    [places, selectedRaw],
+  );
   const [query, setQuery] = useState("");
   const [position, setPosition] = useState(null);
   const [gpsMessage, setGpsMessage] = useState("");
@@ -123,7 +160,7 @@ function App() {
           .map(mapApiPlace);
 
         if (!cancelled) {
-          setPlaces(validPlaces);
+          setRawPlaces(validPlaces);
 
           setSelected((current) => {
             if (validPlaces.length === 0) {
@@ -272,7 +309,7 @@ function App() {
         <a className="brand" href="#">
           <span className="brand-icon">🪷</span>
           <span>
-            <strong>Linh Ứng</strong>
+            <strong>Hệ Thống Thuyết Minh Tự Động</strong>
             <small>SMART PILGRIMAGE</small>
           </span>
         </a>
@@ -635,6 +672,13 @@ function App() {
       )}
     </div>
   );
+}
+function App() {
+  if (window.location.pathname === "/admin") {
+    return <AdminDashboard />;
+  }
+
+  return <MapApp />;
 }
 
 export default App;

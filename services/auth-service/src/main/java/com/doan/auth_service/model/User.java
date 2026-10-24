@@ -24,6 +24,9 @@ public class User {
 
     private Instant createdAt;
 
+    // Chỉ được bật true sau khi Admin duyệt hồ sơ
+    private boolean poiOwnerVerified = false;
+
     public User() {
     }
 
@@ -33,12 +36,14 @@ public class User {
         this.role = role;
         this.status = AccountStatus.ACTIVE;
         this.createdAt = Instant.now();
+        this.poiOwnerVerified = false;
     }
 
-    public enum Role {
-        ADMIN,
-        PROVIDER
-    }
+   public enum Role {
+    ADMIN,
+    ADMINSTAFF,
+    PROVIDER
+}
 
     public enum AccountStatus {
         ACTIVE,
@@ -87,5 +92,13 @@ public class User {
 
     public void setCreatedAt(Instant createdAt) {
         this.createdAt = createdAt;
+    }
+
+    public boolean isPoiOwnerVerified() {
+        return poiOwnerVerified;
+    }
+
+    public void setPoiOwnerVerified(boolean poiOwnerVerified) {
+        this.poiOwnerVerified = poiOwnerVerified;
     }
 }

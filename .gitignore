@@ -437,3 +437,9 @@ services/auth-service-old/
 # Maven build output
 **/target/
 **/effective-pom
+# Local test data and packaged archives
+services/auth-service/login-test.json
+services/content-service.zip
+
+# Local source dump
+frontend/app-source.txt

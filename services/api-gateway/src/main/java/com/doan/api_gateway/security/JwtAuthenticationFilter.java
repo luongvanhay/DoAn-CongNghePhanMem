@@ -30,7 +30,7 @@ public class JwtAuthenticationFilter implements HandlerInterceptor {
         // Chỉ bảo vệ các thao tác quản lý nội dung.
         boolean manageContent =
                 path.equals("/content/contents")
-                || path.matches("/content/contents/\\d+");
+                || path.matches("/content/contents/[^/]+(/translations/[^/]+)?");
 
         boolean writeMethod =
                 HttpMethod.POST.matches(method)

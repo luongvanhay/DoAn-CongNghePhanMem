@@ -6,6 +6,8 @@ import jakarta.validation.constraints.Size;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.DecimalMax;
 import jakarta.validation.constraints.Min;
+import jakarta.validation.Valid;
+import java.util.List;
 
 public class ContentRequest {
 
@@ -46,6 +48,11 @@ public class ContentRequest {
 
     // Trạng thái hoạt động
     private Boolean active = true;
+
+    // Bản dịch kèm theo (tùy chọn). null = giữ nguyên, [] = xóa hết bản dịch.
+    @Valid
+    @Size(max = 20, message = "Tối đa 20 bản dịch")
+    private List<TranslationRequest> translations;
 
     // Getters
     public String getTitle() {
@@ -127,5 +134,13 @@ public class ContentRequest {
 
     public void setActive(Boolean active) {
         this.active = active;
+    }
+
+    public List<TranslationRequest> getTranslations() {
+        return translations;
+    }
+
+    public void setTranslations(List<TranslationRequest> translations) {
+        this.translations = translations;
     }
 }
