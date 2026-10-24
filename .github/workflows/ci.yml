@@ -1,4 +1,4 @@
-
+﻿
 name: CI
 
 on:
@@ -63,7 +63,9 @@ jobs:
           distribution: temurin
           java-version: '17'
           cache: maven
-
       - name: Build service
         working-directory: services/${{ matrix.service }}
+        env:
+          JWT_SECRET: ${{ secrets.JWT_SECRET }}
         run: mvn -B -ntp package
+
