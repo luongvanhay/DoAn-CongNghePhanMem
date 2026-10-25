@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   CreditCard,
   Banknote,
@@ -11,14 +11,63 @@ import {
 import "./PaymentPage.css";
 
 const TICKET_PRICE = 50000;
+const PAYMENTS_API_URL = "/api/payments";
+const REQUEST_TIMEOUT_MS = 15000;
 
-export default function PaymentPage() {
+export default function PaymentPage({ showResult = false }) {
   const [method, setMethod] = useState("");
   const [claimCode, setClaimCode] = useState("");
   const [transactionCode, setTransactionCode] = useState("");
   const [message, setMessage] = useState("");
   const [status, setStatus] = useState("select");
   const [loading, setLoading] = useState(false);
+
+  // Khi quay lại trang bằng nút Back (bfcache), tránh bị kẹt ở trạng thái "đang kết nối".
+  useEffect(() => {
+    function onPageShow(event) {
+      if (event.persisted) setLoading(false);
+    }
+    window.addEventListener("pageshow", onPageShow);
+    return () => window.removeEventListener("pageshow", onPageShow);
+  }, []);
+
+  if (showResult) {
+    const params = new URLSearchParams(window.location.search);
+    const paymentStatus = params.get("status");
+    const transaction = params.get("transactionCode");
+    const succeeded = paymentStatus === "success";
+
+    return (
+      <main className="payment-page">
+        <section className="payment-container">
+          <section className="payment-card">
+            <h1>{succeeded ? "Thanh toán thành công" : "Thanh toán chưa hoàn tất"}</h1>
+            <p>
+              {succeeded
+                ? "Giao dịch đã được xác nhận. Bạn có thể tiếp tục tham quan."
+                : paymentStatus === "invalid"
+                  ? "Không thể xác minh giao dịch. Vui lòng liên hệ nhân viên hỗ trợ."
+                  : "Giao dịch đã bị hủy hoặc không thành công. Bạn có thể thử lại."}
+            </p>
+            {transaction && (
+              <p>
+                Mã giao dịch: <strong>{transaction}</strong>
+              </p>
+            )}
+            <button
+              type="button"
+              className="payment-primary-button"
+              onClick={() => {
+                window.location.href = succeeded ? "/" : "/payment";
+              }}
+            >
+              {succeeded ? "Tiếp tục tham quan" : "Quay lại thanh toán"}
+            </button>
+          </section>
+        </section>
+      </main>
+    );
+  }
 
   function chooseMethod(value) {
     setMethod(value);
@@ -33,7 +82,7 @@ export default function PaymentPage() {
     setMessage("");
 
     try {
-      const response = await fetch("/api/payments", {
+      const response = await fetch(PAYMENTS_API_URL, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -58,18 +107,62 @@ export default function PaymentPage() {
     } catch (error) {
       setStatus("notice");
       setMessage(
-        error.message || "Không thể kết nối máy chủ. Vui lòng thử lại.",
+        error.message || "Không thể kết nối máy chủ. Vui lòng kiểm tra lại Backend.",
       );
     } finally {
       setLoading(false);
     }
   }
 
-  async function handleOnlinePayment() {
-    setStatus("notice");
-    setMessage(
-      "Payoo chưa được tích hợp với máy chủ. Vui lòng chọn thanh toán tiền mặt hoặc thử lại khi cổng Payoo đã được cấu hình.",
-    );
+  // Tạo giao dịch VNPay rồi chuyển sang trang chọn phương thức thanh toán.
+  async function handleVNPayPayment() {
+    setLoading(true);
+    setMessage("");
+    setStatus("select");
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+
+    try {
+      const response = await fetch(PAYMENTS_API_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          amount: TICKET_PRICE,
+          method: "VNPAY",
+        }),
+        signal: controller.signal,
+      });
+
+      const data = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        throw new Error(
+          data.message ||
+            `Không thể tạo giao dịch VNPay (HTTP ${response.status}).`,
+        );
+      }
+
+      if (!data.paymentUrl) {
+        throw new Error("Không nhận được đường dẫn thanh toán từ máy chủ.");
+      }
+
+      // Chuyển trình duyệt sang trang thanh toán VNPay (có mã QR để quét)
+      window.location.href = data.paymentUrl;
+    } catch (error) {
+      setStatus("notice");
+      setMessage(
+        error.name === "AbortError"
+          ? "Máy chủ phản hồi quá lâu. Vui lòng kiểm tra Backend và thử lại."
+          : error.message ||
+              "Không thể kết nối máy chủ. Vui lòng kiểm tra lại Backend.",
+      );
+      setLoading(false);
+    } finally {
+      clearTimeout(timeout);
+    }
   }
 
   async function handleClaimSubmit(event) {
@@ -89,7 +182,7 @@ export default function PaymentPage() {
     setMessage("");
 
     try {
-      const response = await fetch("/api/payments/claim", {
+      const response = await fetch(`${PAYMENTS_API_URL}/claim`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -163,9 +256,9 @@ export default function PaymentPage() {
           <button
             type="button"
             className={`payment-option ${
-              method === "online" ? "selected" : ""
+              method === "vnpay" ? "selected" : ""
             }`}
-            onClick={() => chooseMethod("online")}
+            onClick={() => chooseMethod("vnpay")}
             disabled={loading || status === "success"}
           >
             <span className="payment-option-icon online">
@@ -173,10 +266,10 @@ export default function PaymentPage() {
             </span>
             <span className="payment-option-text">
               <strong>Thanh toán trực tuyến</strong>
-              <span>Thanh toán qua cổng Payoo</span>
+              <span>Thanh toán qua cổng VNPay</span>
             </span>
             <span className="payment-radio">
-              {method === "online" ? "✓" : ""}
+              {method === "vnpay" ? "✓" : ""}
             </span>
           </button>
 
@@ -198,19 +291,19 @@ export default function PaymentPage() {
             </span>
           </button>
 
-          {method === "online" && (
+          {method === "vnpay" && (
             <div className="payment-action-panel">
               <p>
-                Giá vé là 50.000 đồng/lượt. Cổng Payoo hiện chưa được kết nối
-                với máy chủ.
+                Giá vé là 50.000 đồng/lượt. Sau khi tiếp tục, VNPay sẽ hiển thị
+                các phương thức thanh toán được hỗ trợ.
               </p>
               <button
                 type="button"
                 className="payment-primary-button"
-                onClick={handleOnlinePayment}
+                onClick={handleVNPayPayment}
                 disabled={loading}
               >
-                Tiếp tục thanh toán
+                {loading ? "Đang kết nối VNPay..." : "Tiếp tục thanh toán"}
               </button>
             </div>
           )}

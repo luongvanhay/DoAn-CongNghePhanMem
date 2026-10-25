@@ -312,6 +312,64 @@
   background: #10563f;
 }
 
+/* QR thanh toán VNPay */
+
+.payment-qr-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+.payment-qr-frame {
+  padding: 12px;
+  background: #ffffff;
+  border: 1px solid #dfe6ee;
+  border-radius: 16px;
+  line-height: 0;
+}
+
+.payment-qr-frame svg {
+  width: min(240px, 100%);
+  height: auto;
+}
+
+.payment-qr-box .payment-qr-amount {
+  margin: 14px 0 4px;
+  color: #176b52;
+  font-size: 20px;
+  font-weight: 800;
+}
+
+.payment-qr-box .payment-qr-hint,
+.payment-qr-box .payment-qr-timer,
+.payment-qr-box .payment-qr-code {
+  margin: 4px 0;
+  color: #566479;
+  font-size: 13px;
+  line-height: 1.7;
+}
+
+.payment-link-button {
+  margin-top: 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #176b52;
+  font-size: 13px;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.payment-link-button:hover {
+  text-decoration: underline;
+}
+
+.payment-primary-button:disabled {
+  opacity: 0.7;
+  cursor: wait;
+}
+
 /* Feedback */
 
 .payment-message {

@@ -6,7 +6,14 @@ import PaymentPage from "./pages/Payment/PaymentPage.jsx";
 
 const path = window.location.pathname;
 
-const page = path === "/payment" ? <PaymentPage /> : <App />;
+const page =
+  path === "/payment" ? (
+    <PaymentPage />
+  ) : path === "/payment-result" ? (
+    <PaymentPage showResult />
+  ) : (
+    <App />
+  );
 
 createRoot(document.getElementById("root")).render(
   <StrictMode>{page}</StrictMode>,

@@ -1,5 +1,6 @@
 services:
   api-gateway:
+    platform: linux/amd64
     build:
       context: ./services/api-gateway
     ports:
@@ -17,6 +18,7 @@ services:
       - tts-service
 
   auth-service:
+    platform: linux/amd64
     build:
       context: ./services/auth-service
     ports:
@@ -28,12 +30,14 @@ services:
       - mongodb
 
   tts-service:
+    platform: linux/amd64
     build:
       context: ./services/tts-service
     ports:
       - "3003:3003"
 
   content-service:
+    platform: linux/amd64
     build:
       context: ./services/content-service
     ports:
@@ -41,11 +45,16 @@ services:
     environment:
       - JWT_SECRET=${JWT_SECRET}
       - MONGODB_URI=mongodb://mongodb:27017/content_db
+      - VNP_TMN_CODE=${VNP_TMN_CODE}
+      - VNP_HASH_SECRET=${VNP_HASH_SECRET}
+      - VNP_RETURN_URL=${VNP_RETURN_URL:-http://localhost:3001/payments/vnpay-return}
+      - VNP_FRONTEND_RETURN_URL=${VNP_FRONTEND_RETURN_URL:-http://localhost:5173/payment-result}
     depends_on:
       - mongodb
     restart: always
 
   translation-service:
+    platform: linux/amd64
     build:
       context: ./services/translation-service
     ports:
