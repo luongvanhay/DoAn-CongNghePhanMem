@@ -3,13 +3,21 @@ package com.doan.content_service.controller;
 
 import com.doan.content_service.model.PaymentTransaction;
 import com.doan.content_service.repository.PaymentTransactionRepository;
+import com.doan.content_service.service.VnpayService;
+import jakarta.servlet.http.HttpServletRequest;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.util.MultiValueMap;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.util.UriComponentsBuilder;
 
+import java.net.URI;
 import java.security.SecureRandom;
+import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
@@ -20,18 +28,25 @@ import java.util.UUID;
 public class PaymentController {
 
     private final PaymentTransactionRepository paymentRepository;
+    private final VnpayService vnpayService;
     private final SecureRandom random = new SecureRandom();
     private static final long TICKET_PRICE = 50000L;
 
+    @Value("${payment.frontend-return-url:http://localhost:5173/payment}")
+    private String frontendReturnUrl;
+
     public PaymentController(
-            PaymentTransactionRepository paymentRepository) {
+            PaymentTransactionRepository paymentRepository,
+            VnpayService vnpayService) {
         this.paymentRepository = paymentRepository;
+        this.vnpayService = vnpayService;
     }
 
     // Tạo giao dịch thanh toán
     @PostMapping
     public ResponseEntity<?> createPayment(
-            @RequestBody CreatePaymentRequest request) {
+            @RequestBody CreatePaymentRequest request,
+            HttpServletRequest httpRequest) {
 
         if (request.getAmount() == null
         || request.getAmount() != TICKET_PRICE) {
@@ -40,11 +55,18 @@ public class PaymentController {
 }
 
         String method = request.getMethod() == null
-                ? "" : request.getMethod().trim().toUpperCase();
+                ? "" : request.getMethod().trim().toUpperCase(java.util.Locale.ROOT);
 
-        if (!method.equals("PAYOO") && !method.equals("CASH")) {
+        if (!method.equals("VNPAY") && !method.equals("CASH")) {
             return ResponseEntity.badRequest()
-                    .body(message("Phương thức phải là PAYOO hoặc CASH"));
+                    .body(message("Phương thức phải là VNPAY hoặc CASH"));
+        }
+
+        if (method.equals("VNPAY") && !vnpayService.isConfigured()) {
+            return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                    .body(message(
+                            "Chưa cấu hình VNPay. Hãy thêm VNPAY_TMN_CODE và "
+                                    + "VNPAY_HASH_SECRET vào .env."));
         }
 
         PaymentTransaction transaction = new PaymentTransaction();
@@ -53,6 +75,8 @@ public class PaymentController {
                         .replace("-", "").substring(0, 12).toUpperCase());
         transaction.setAmount(TICKET_PRICE);
         transaction.setMethod(method);
+        transaction.setLanguage(normalizeLanguage(request.getLanguage()));
+        transaction.setSource("qr".equals(request.getSource()) ? "qr" : null);
         transaction.setStatus("PENDING");
         transaction.setAccessGranted(false);
         transaction.setCreatedAt(LocalDateTime.now());
@@ -62,6 +86,12 @@ public class PaymentController {
             transaction.setClaimCode(generateClaimCode());
         }
 
+        String paymentUrl = method.equals("VNPAY")
+                ? vnpayService.createPaymentUrl(
+                        transaction.getTransactionCode(),
+                        transaction.getAmount(),
+                        httpRequest.getRemoteAddr())
+                : null;
         PaymentTransaction saved = paymentRepository.save(transaction);
 
         Map<String, Object> response = new HashMap<>();
@@ -70,6 +100,10 @@ public class PaymentController {
         response.put("method", saved.getMethod());
         response.put("status", saved.getStatus());
         response.put("accessGranted", saved.isAccessGranted());
+        if (paymentUrl != null) {
+            response.put("paymentUrl", paymentUrl);
+            response.put("expiresAt", Instant.now().plusSeconds(15 * 60L).toString());
+        }
 
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
@@ -97,6 +131,133 @@ public class PaymentController {
         response.put("accessGranted", transaction.isAccessGranted());
 
         return ResponseEntity.ok(response);
+    }
+
+    @GetMapping("/cash/pending")
+    public List<Map<String, Object>> getPendingCashPayments() {
+        return paymentRepository
+                .findByMethodAndStatusOrderByCreatedAtDesc("CASH", "PENDING")
+                .stream()
+                .map(transaction -> {
+                    Map<String, Object> payment = new HashMap<>();
+                    payment.put("transactionCode", transaction.getTransactionCode());
+                    payment.put("amount", transaction.getAmount());
+                    payment.put("createdAt", transaction.getCreatedAt() == null
+                            ? "" : transaction.getCreatedAt().toString());
+                    payment.put("language", transaction.getLanguage() == null
+                            ? "vi" : transaction.getLanguage());
+                    return payment;
+                })
+                .toList();
+    }
+
+    @GetMapping("/vnpay/return")
+    public ResponseEntity<Void> vnpayReturn(
+            @RequestParam MultiValueMap<String, String> parameters) {
+        String transactionCode = parameters.getFirst("vnp_TxnRef");
+        boolean paid = transactionCode != null
+                && vnpayService.hasValidSignature(parameters)
+                && processVnpayPaymentResult(parameters, transactionCode);
+
+        UriComponentsBuilder redirectBuilder =
+                UriComponentsBuilder.fromUriString(frontendReturnUrl)
+                        .queryParam("transactionCode",
+                                transactionCode == null ? "" : transactionCode)
+                        .queryParam("paymentResult", paid ? "verified" : "failed");
+        if (transactionCode != null) {
+            paymentRepository.findByTransactionCode(transactionCode)
+                    .ifPresent(transaction -> {
+                        if (transaction.getLanguage() != null) {
+                            redirectBuilder.queryParam("lang", transaction.getLanguage());
+                        }
+                        if ("qr".equals(transaction.getSource())) {
+                            redirectBuilder.queryParam("source", "qr");
+                        }
+                    });
+        }
+        URI redirect = redirectBuilder.build().encode().toUri();
+        return ResponseEntity.status(HttpStatus.FOUND).location(redirect).build();
+    }
+
+    @GetMapping("/vnpay/ipn")
+    public Map<String, String> vnpayIpn(
+            @RequestParam MultiValueMap<String, String> parameters) {
+        if (!vnpayService.hasValidSignature(parameters)) {
+            return vnpayResponse("97", "Invalid signature");
+        }
+
+        String transactionCode = parameters.getFirst("vnp_TxnRef");
+        if (transactionCode == null || transactionCode.isBlank()) {
+            return vnpayResponse("01", "Order not found");
+        }
+        Optional<PaymentTransaction> optional =
+                paymentRepository.findByTransactionCode(transactionCode);
+        if (optional.isEmpty()) {
+            return vnpayResponse("01", "Order not found");
+        }
+
+        PaymentTransaction transaction = optional.get();
+        if (!"VNPAY".equals(transaction.getMethod())) {
+            return vnpayResponse("01", "Order method mismatch");
+        }
+        String amount = parameters.getFirst("vnp_Amount");
+        if (amount == null
+                || !amount.equals(Long.toString(transaction.getAmount() * 100))) {
+            return vnpayResponse("04", "Invalid amount");
+        }
+
+        if (!"PAID".equals(transaction.getStatus())) {
+            if (isSuccessfulVnpayPayment(parameters)) {
+                transaction.setStatus("PAID");
+                transaction.setPaidAt(LocalDateTime.now());
+                transaction.setAccessGranted(true);
+            } else if ("PENDING".equals(transaction.getStatus())) {
+                transaction.setStatus("FAILED");
+            }
+            paymentRepository.save(transaction);
+        }
+        return vnpayResponse("00", "Confirm Success");
+    }
+
+    private boolean processVnpayPaymentResult(
+            MultiValueMap<String, String> parameters,
+            String transactionCode) {
+        Optional<PaymentTransaction> optional =
+                paymentRepository.findByTransactionCode(transactionCode);
+        if (optional.isEmpty()) {
+            return false;
+        }
+
+        PaymentTransaction transaction = optional.get();
+        String amount = parameters.getFirst("vnp_Amount");
+        if (!"VNPAY".equals(transaction.getMethod())
+                || amount == null
+                || !amount.equals(Long.toString(transaction.getAmount() * 100))) {
+            return false;
+        }
+
+        if (isSuccessfulVnpayPayment(parameters)) {
+            transaction.setStatus("PAID");
+            transaction.setPaidAt(LocalDateTime.now());
+            transaction.setAccessGranted(true);
+            paymentRepository.save(transaction);
+            return true;
+        }
+        if ("PENDING".equals(transaction.getStatus())) {
+            transaction.setStatus("FAILED");
+            paymentRepository.save(transaction);
+        }
+        return false;
+    }
+
+    private boolean isSuccessfulVnpayPayment(
+            MultiValueMap<String, String> parameters) {
+        return "00".equals(parameters.getFirst("vnp_ResponseCode"))
+                && "00".equals(parameters.getFirst("vnp_TransactionStatus"));
+    }
+
+    private Map<String, String> vnpayResponse(String code, String message) {
+        return Map.of("RspCode", code, "Message", message);
     }
 
     // Nhận Claim code để cấp quyền truy cập một lần
@@ -202,6 +363,11 @@ public class PaymentController {
         return code;
     }
 
+    private String normalizeLanguage(String language) {
+        return language != null && language.matches("[a-z]{2}(-[A-Z]{2})?")
+                ? language : "vi";
+    }
+
     private Map<String, String> message(String value) {
         Map<String, String> response = new HashMap<>();
         response.put("message", value);
@@ -211,6 +377,8 @@ public class PaymentController {
     public static class CreatePaymentRequest {
         private Long amount;
         private String method;
+        private String language;
+        private String source;
 
         public Long getAmount() {
             return amount;
@@ -226,6 +394,22 @@ public class PaymentController {
 
         public void setMethod(String method) {
             this.method = method;
+        }
+
+        public String getLanguage() {
+            return language;
+        }
+
+        public void setLanguage(String language) {
+            this.language = language;
+        }
+
+        public String getSource() {
+            return source;
+        }
+
+        public void setSource(String source) {
+            this.source = source;
         }
     }
 

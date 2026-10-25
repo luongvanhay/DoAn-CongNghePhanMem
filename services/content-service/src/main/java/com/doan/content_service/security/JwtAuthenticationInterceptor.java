@@ -28,27 +28,30 @@ public boolean preHandle(
     String method = request.getMethod();
     String path = request.getRequestURI();
 
+    boolean readVisitLog =
+            HttpMethod.GET.matches(method) && path.equals("/visits/recent");
+    boolean confirmCashPayment =
+            HttpMethod.POST.matches(method)
+                    && path.matches("/payments/[^/]+/confirm-cash");
+    boolean readPendingCashPayments =
+            HttpMethod.GET.matches(method) && path.equals("/payments/cash/pending");
     boolean writeRequest =
             HttpMethod.POST.matches(method)
             || HttpMethod.PUT.matches(method)
             || HttpMethod.PATCH.matches(method)
             || HttpMethod.DELETE.matches(method);
 
-    if (!writeRequest) {
+    if (!writeRequest && !readVisitLog && !readPendingCashPayments) {
         return true;
     }
-
-    // Endpoint xác nhận đã thu tiền mặt.
-    boolean confirmCash =
-            HttpMethod.POST.matches(method)
-            && path.matches("/payments/[^/]+/confirm-cash");
 
     // Các endpoint quản lý nội dung hiện có.
     boolean manageContent =
             path.equals("/contents")
             || path.matches("/contents/[^/]+(/translations/[^/]+)?");
 
-    if (!confirmCash && !manageContent) {
+    if (!manageContent && !readVisitLog
+            && !confirmCashPayment && !readPendingCashPayments) {
         return true;
     }
 
@@ -71,14 +74,20 @@ public boolean preHandle(
         String role = claims.get("role", String.class);
         String username = claims.get("username", String.class);
 
-        boolean allowedRole = confirmCash
-                ? "ADMINSTAFF".equals(role)
+        boolean adminOnly =
+                readVisitLog || confirmCashPayment || readPendingCashPayments;
+        boolean allowedRole = adminOnly
+                ? "ADMIN".equals(role)
                 : ("ADMIN".equals(role) || "PROVIDER".equals(role));
 
         if (userId == null || userId.isBlank() || !allowedRole) {
             writeError(response, 403,
-                    confirmCash
-                            ? "Chi ADMINSTAFF moi duoc xac nhan tien mat"
+                    readVisitLog
+                            ? "Chi ADMIN moi duoc xem lich su truy cap"
+                            : confirmCashPayment
+                                    ? "Chi ADMIN moi duoc xac nhan thanh toan tien mat"
+                                    : readPendingCashPayments
+                                            ? "Chi ADMIN moi duoc xem giao dich tien mat"
                             : "Tai khoan khong co quyen quan ly noi dung");
             return false;
         }

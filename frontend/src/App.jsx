@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useState } from "react";
-import { getContents } from "./services/contentService";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { getContents, recordVisit } from "./services/contentService";
 import AdminDashboard from "./pages/Admin/AdminDashboard";
+import { languages, messages, supportedLanguageCodes } from "./i18n";
 import {
   MapContainer,
   TileLayer,
@@ -24,13 +25,7 @@ import "leaflet/dist/leaflet.css";
 import "./App.css";
 
 const DEFAULT_POSITION = [16.003, 108.264];
-
-const languages = [
-  { code: "vi", label: "Tiếng Việt" },
-  { code: "en", label: "English" },
-  { code: "zh", label: "中文" },
-  { code: "ko", label: "한국어" },
-];
+const translationCache = new Map();
 
 function mapApiPlace(item) {
   return {
@@ -38,6 +33,7 @@ function mapApiPlace(item) {
     name: item.title || "Địa điểm chưa có tên",
     category: item.location || "Điểm tham quan",
     description: item.body || "Chưa có nội dung thuyết minh.",
+    imageUrl: item.imageUrl || "",
     position: [Number(item.latitude), Number(item.longitude)],
     icon: "📍",
     sourceLanguage: item.sourceLanguage || "vi",
@@ -45,7 +41,7 @@ function mapApiPlace(item) {
   };
 }
 
-// Chọn tên/mô tả theo ngôn ngữ đang chọn; không có bản dịch thì dùng nội dung gốc.
+// Ưu tiên bản dịch do quản trị viên lưu trong MongoDB.
 function localizePlace(place, language) {
   if (!language || language === place.sourceLanguage) {
     return place;
@@ -63,6 +59,75 @@ function localizePlace(place, language) {
     ...place,
     name: translation.title || place.name,
     description: translation.description || place.description,
+  };
+}
+
+async function translateText(text, source, target) {
+  if (!text || source === target) {
+    return text;
+  }
+
+  const cacheKey = `translation:${source}:${target}:${text}`;
+  const cached = translationCache.get(cacheKey);
+  if (cached) {
+    return cached;
+  }
+
+  const response = await fetch("/api/translation/translate", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ text, source, target }),
+  });
+  const data = await response.json().catch(() => ({}));
+
+  if (!response.ok || !data.translated_text) {
+    throw new Error(data.message || `Dịch nội dung thất bại (HTTP ${response.status}).`);
+  }
+
+  translationCache.set(cacheKey, data.translated_text);
+  return data.translated_text;
+}
+
+async function translatePlace(place, language) {
+  const savedTranslation = place.translations.find(
+    (item) => item.languageCode === language,
+  );
+  const source = place.sourceLanguage || "vi";
+
+  if (savedTranslation?.description?.trim()) {
+    const localized = localizePlace(place, language);
+    return localized;
+  }
+
+  const separator = `[[FIELD_${Math.random().toString(36).slice(2)}]]`;
+  const translatedFields = await translateText(
+    [place.name, place.category, place.description].join(
+      `\n${separator}\n`,
+    ),
+    source,
+    language,
+  );
+  const fields = translatedFields.split(separator).map((field) => field.trim());
+
+  if (fields.length !== 3) {
+    const individualFields = await Promise.all([
+      translateText(place.name, source, language),
+      translateText(place.category, source, language),
+      translateText(place.description, source, language),
+    ]);
+    return {
+      ...place,
+      name: individualFields[0],
+      category: individualFields[1],
+      description: individualFields[2],
+    };
+  }
+
+  return {
+    ...place,
+    name: fields[0],
+    category: fields[1],
+    description: fields[2],
   };
 }
 
@@ -85,16 +150,55 @@ function MapController({ place, userPosition }) {
   return null;
 }
 
-function MapApp() {
-  const [rawPlaces, setRawPlaces] = useState([]);
-  const [selectedRaw, setSelected] = useState(null);
-  const [language, setLanguage] = useState("vi");
-
-  // Danh sách và POI đang chọn, đã áp dụng ngôn ngữ hiện tại.
-  const places = useMemo(
-    () => rawPlaces.map((place) => localizePlace(place, language)),
-    [rawPlaces, language],
+function LanguageSelection({ onSelect }) {
+  return (
+    <main className="language-selection">
+      <section className="language-selection-card">
+        <span className="language-selection-brand" aria-hidden="true">
+          🪷
+        </span>
+        <p className="eyebrow">KHÁM PHÁ SƠN TRÀ</p>
+        <h1>Chào mừng đến với Sơn Trà</h1>
+        <p className="language-selection-description">
+          Chọn ngôn ngữ để xem trang web và nghe thuyết minh. Bạn có thể đổi
+          ngôn ngữ bất cứ lúc nào.
+        </p>
+        <div className="language-selection-primary">
+          <Languages size={17} />
+          Tiếng Việt là ngôn ngữ chính
+        </div>
+        <div className="language-selection-grid">
+          {languages.map((item) => (
+            <button
+              key={item.code}
+              type="button"
+              className={`language-option ${item.code === "vi" ? "primary" : ""}`}
+              onClick={() => onSelect(item.code)}
+            >
+              <span>{item.nativeName}</span>
+              <small>{item.code === "vi" ? "Mặc định" : item.label}</small>
+            </button>
+          ))}
+        </div>
+        <p className="language-selection-footer">
+          Hệ thống thuyết minh tự động · Bán đảo Sơn Trà, Đà Nẵng
+        </p>
+        <p className="language-selection-privacy">
+          Website chỉ lưu mã khách ngẫu nhiên, thời điểm truy cập và ngôn ngữ
+          đã chọn để thống kê; không lưu tên, email hay mật khẩu.
+        </p>
+      </section>
+    </main>
   );
+}
+
+function MapApp({ language, onChangeLanguage, onOpenLanguageSelection }) {
+  const text = messages[language] || messages.vi;
+  const [localizedPlaces, setLocalizedPlaces] = useState([]);
+  const [selectedRaw, setSelected] = useState(null);
+  const [translationError, setTranslationError] = useState("");
+
+  const places = localizedPlaces;
   const selected = useMemo(
     () =>
       selectedRaw
@@ -108,7 +212,22 @@ function MapApp() {
   const [chatOpen, setChatOpen] = useState(false);
   const [question, setQuestion] = useState("");
   const [answer, setAnswer] = useState("");
-  const [playing, setPlaying] = useState(false);
+  const [audioPlayback, setAudioPlayback] = useState({
+    status: "idle",
+    placeId: null,
+    language: null,
+    description: null,
+  });
+  const playbackMatchesSelection =
+    audioPlayback.placeId === selected?.id &&
+    audioPlayback.language === language &&
+    audioPlayback.description === selected?.description;
+  const playing =
+    playbackMatchesSelection && audioPlayback.status === "playing";
+  const audioLoading =
+    playbackMatchesSelection && audioPlayback.status === "loading";
+  const audioRef = useRef(null);
+  const audioRequestRef = useRef(null);
   const [loading, setLoading] = useState(true);
   const [apiError, setApiError] = useState("");
   const [reloadKey, setReloadKey] = useState(0);
@@ -122,6 +241,7 @@ function MapApp() {
     async function loadPlaces() {
       setLoading(true);
       setApiError("");
+      setTranslationError("");
 
       try {
         const data = await getContents();
@@ -159,17 +279,35 @@ function MapApp() {
           })
           .map(mapApiPlace);
 
+        const localized = await Promise.all(
+          validPlaces.map(async (place) => {
+            try {
+              return await translatePlace(place, language);
+            } catch (error) {
+              if (!cancelled) {
+                setTranslationError(
+                  error?.message || text.translationError,
+                );
+              }
+              return {
+                ...localizePlace(place, language),
+                translationMissing: language !== place.sourceLanguage,
+              };
+            }
+          }),
+        );
+
         if (!cancelled) {
-          setRawPlaces(validPlaces);
+          setLocalizedPlaces(localized);
 
           setSelected((current) => {
-            if (validPlaces.length === 0) {
+            if (localized.length === 0) {
               return null;
             }
 
             return (
-              validPlaces.find((place) => place.id === current?.id) ||
-              validPlaces[0]
+              localized.find((place) => place.id === current?.id) ||
+              localized[0]
             );
           });
         }
@@ -189,16 +327,25 @@ function MapApp() {
     return () => {
       cancelled = true;
     };
-  }, [reloadKey]);
+  }, [reloadKey, language, text.translationError]);
 
-  // Dừng thuyết minh khi rời khỏi trang.
+  // Stop audio when the selected narration changes or the page is left.
   useEffect(() => {
     return () => {
-      if ("speechSynthesis" in window) {
-        window.speechSynthesis.cancel();
+      audioRequestRef.current?.abort();
+      audioRequestRef.current = null;
+
+      if (audioRef.current) {
+        audioRef.current.onended = null;
+        audioRef.current.onerror = null;
+        audioRef.current.pause();
+        if (audioRef.current.src.startsWith("blob:")) {
+          URL.revokeObjectURL(audioRef.current.src);
+        }
+        audioRef.current = null;
       }
     };
-  }, []);
+  }, [selected?.id, selected?.description, language]);
 
   const filteredPlaces = places.filter((place) =>
     place.name.toLowerCase().includes(query.trim().toLowerCase()),
@@ -246,39 +393,113 @@ function MapApp() {
 
   function toggleAudio() {
     if (!selected) {
-      setGpsMessage("Chưa có địa điểm để thuyết minh.");
+      setGpsMessage(text.noPlaces);
       return;
     }
 
-    if (playing) {
-      window.speechSynthesis?.cancel();
-      setPlaying(false);
+    if (selected.translationMissing) {
+      setGpsMessage(text.translationError);
       return;
     }
 
-    if (!("speechSynthesis" in window)) {
-      setGpsMessage("Trình duyệt chưa hỗ trợ đọc văn bản.");
+    if (playing || audioLoading) {
+      audioRequestRef.current?.abort();
+      audioRequestRef.current = null;
+
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current.currentTime = 0;
+        if (audioRef.current.src.startsWith("blob:")) {
+          URL.revokeObjectURL(audioRef.current.src);
+        }
+        audioRef.current = null;
+      }
+
+      setAudioPlayback({
+        status: "idle",
+        placeId: null,
+        language: null,
+        description: null,
+      });
       return;
     }
 
-    window.speechSynthesis.cancel();
+    const controller = new AbortController();
+    audioRequestRef.current = controller;
+    setGpsMessage("");
+    const narration = {
+      placeId: selected.id,
+      language,
+      description: selected.description,
+    };
+    setAudioPlayback({ ...narration, status: "loading" });
 
-    const speech = new SpeechSynthesisUtterance(selected.description);
+    async function playNarration() {
+      try {
+        const response = await fetch("/api/tts/audio", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            text: selected.description,
+            lang: languages.find((item) => item.code === language)?.tts || language,
+          }),
+          signal: controller.signal,
+        });
 
-    speech.lang =
-      language === "vi"
-        ? "vi-VN"
-        : language === "ko"
-          ? "ko-KR"
-          : language === "zh"
-            ? "zh-CN"
-            : "en-US";
+        if (!response.ok) {
+          throw new Error(`${text.narrationError} (HTTP ${response.status})`);
+        }
 
-    speech.onend = () => setPlaying(false);
-    speech.onerror = () => setPlaying(false);
+        if (controller.signal.aborted) {
+          return;
+        }
 
-    window.speechSynthesis.speak(speech);
-    setPlaying(true);
+        const audioUrl = URL.createObjectURL(await response.blob());
+        const audio = new Audio(audioUrl);
+        audioRef.current = audio;
+        audio.onended = () => {
+          URL.revokeObjectURL(audioUrl);
+          audioRef.current = null;
+          setAudioPlayback({ ...narration, status: "idle" });
+        };
+        audio.onerror = () => {
+          URL.revokeObjectURL(audioUrl);
+          audioRef.current = null;
+          setAudioPlayback({ ...narration, status: "idle" });
+          setGpsMessage(text.narrationError);
+        };
+
+        await audio.play();
+        if (controller.signal.aborted) {
+          audio.pause();
+          URL.revokeObjectURL(audioUrl);
+          if (audioRef.current === audio) {
+            audioRef.current = null;
+          }
+          return;
+        }
+
+        setAudioPlayback({ ...narration, status: "playing" });
+      } catch (error) {
+        if (error.name !== "AbortError") {
+          if (audioRef.current?.src.startsWith("blob:")) {
+            URL.revokeObjectURL(audioRef.current.src);
+          }
+          audioRef.current?.pause();
+          audioRef.current = null;
+          setAudioPlayback({ ...narration, status: "idle" });
+          setGpsMessage(text.narrationError);
+        }
+      } finally {
+        if (audioRequestRef.current === controller) {
+          audioRequestRef.current = null;
+        }
+      }
+    }
+
+    playNarration();
   }
 
   function askQuestion(event) {
@@ -289,45 +510,41 @@ function MapApp() {
     }
 
     if (!selected) {
-      setAnswer(
-        "Hiện chưa có địa điểm hợp lệ. Vui lòng thử lại sau khi tải được dữ liệu POI.",
-      );
+      setAnswer(text.noPlaces);
       setQuestion("");
       return;
     }
 
-    setAnswer(
-      `Bạn đang hỏi về "${selected.name}". Đây là bản demo giao diện chatbot. Khi tích hợp API chatbot, câu hỏi sẽ được gửi đến backend để xử lý và trả lời.`,
-    );
+    setAnswer(`${selected.name}. ${text.fromBackend}`);
 
     setQuestion("");
   }
 
   return (
-    <div className="app-shell">
+    <div className="app-shell" dir={language === "ar" ? "rtl" : "ltr"}>
       <header className="topbar">
         <a className="brand" href="#">
           <span className="brand-icon">🪷</span>
           <span>
-            <strong>Hệ Thống Thuyết Minh Tự Động</strong>
+            <strong>{text.appName}</strong>
             <small>SMART PILGRIMAGE</small>
           </span>
         </a>
 
         <nav className="desktop-nav">
           <a className="nav-active" href="#map">
-            Bản đồ
+            {text.navMap}
           </a>
-          <a href="#places">Điểm tham quan</a>
-          <a href="#guide">Thuyết minh</a>
+          <a href="#places">{text.navPlaces}</a>
+          <a href="#guide">{text.navNarration}</a>
         </nav>
 
         <label className="language-picker">
           <Languages size={17} />
           <select
             value={language}
-            onChange={(event) => setLanguage(event.target.value)}
-            aria-label="Chọn ngôn ngữ"
+            onChange={(event) => onChangeLanguage(event.target.value)}
+            aria-label={text.changeLanguage}
           >
             {languages.map((item) => (
               <option key={item.code} value={item.code}>
@@ -336,24 +553,28 @@ function MapApp() {
             ))}
           </select>
         </label>
+        <button
+          className="language-change-button"
+          type="button"
+          onClick={onOpenLanguageSelection}
+        >
+          {text.changeLanguage}
+        </button>
       </header>
 
       <main>
         <section className="hero">
           <div className="hero-content">
             <span className="eyebrow">
-              <Compass size={15} /> KHÁM PHÁ SƠN TRÀ
+              <Compass size={15} /> {text.heroKicker}
             </span>
 
             <h1>
-              Hành trình tâm linh
-              <br />
-              giữa thiên nhiên
+              {text.heroTitle}
             </h1>
 
             <p>
-              Khám phá Chùa Linh Ứng, tìm hiểu những công trình tâm linh và lắng
-              nghe câu chuyện phía sau mỗi điểm đến.
+              {text.heroDescription}
             </p>
 
             <button
@@ -365,22 +586,22 @@ function MapApp() {
               }
             >
               <Navigation size={18} />
-              Bắt đầu tham quan
+              {text.start}
             </button>
           </div>
 
           <div className="hero-stats">
             <div>
               <strong>{String(places.length).padStart(2, "0")}</strong>
-              <span>Điểm tham quan</span>
+              <span>{text.placeCount}</span>
             </div>
             <div>
               <strong>GPS</strong>
-              <span>Định vị trực tiếp</span>
+              <span>{text.gps}</span>
             </div>
             <div>
-              <strong>04</strong>
-              <span>Ngôn ngữ mẫu</span>
+              <strong>{String(languages.length).padStart(2, "0")}</strong>
+              <span>{text.languageCount}</span>
             </div>
           </div>
         </section>
@@ -388,36 +609,47 @@ function MapApp() {
         <section className="explorer" id="map">
           <div className="section-heading">
             <div>
-              <span className="eyebrow">YOUR JOURNEY</span>
-              <h2>Bản đồ tham quan</h2>
-              <p>Chọn một địa điểm để khám phá chi tiết.</p>
+              <span className="eyebrow">{text.mapKicker}</span>
+              <h2>{text.mapTitle}</h2>
+              <p>{text.mapDescription}</p>
             </div>
 
             <button className="outline-button" onClick={locateMe}>
               <LocateFixed size={17} />
-              Vị trí của tôi
+              {text.myLocation}
             </button>
           </div>
 
           {loading && (
             <div className="status-message" role="status">
-              Đang tải dữ liệu địa điểm...
+              {text.loadingPlaces}
             </div>
           )}
 
           {apiError && (
             <div className="status-message" role="alert">
-              <p>Lỗi tải địa điểm: {apiError}</p>
+              <p>{text.loadError}: {apiError}</p>
               <button className="outline-button" onClick={retryLoadPlaces}>
-                Thử tải lại
+                {text.retry}
               </button>
             </div>
           )}
 
           {!loading && !apiError && places.length === 0 && (
             <div className="status-message" role="status">
-              Chưa có POI hợp lệ. Bản đồ vẫn hoạt động; hãy kiểm tra dữ liệu và
-              tọa độ trong backend.
+              {text.noPlaces}
+            </div>
+          )}
+
+          {loading && language !== "vi" && (
+            <div className="status-message" role="status">
+              {text.loadingTranslation}
+            </div>
+          )}
+
+          {translationError && (
+            <div className="status-message" role="alert">
+              {text.translationError} {translationError}
             </div>
           )}
 
@@ -432,15 +664,15 @@ function MapApp() {
               <div className="search-box">
                 <Search size={18} />
                 <input
-                  placeholder="Tìm điểm tham quan..."
+                  placeholder={text.search}
                   value={query}
                   onChange={(event) => setQuery(event.target.value)}
-                  aria-label="Tìm điểm tham quan"
+                  aria-label={text.search}
                 />
               </div>
 
               <div className="places-count">
-                DANH SÁCH ĐỊA ĐIỂM
+                {text.placesList}
                 <span>{filteredPlaces.length}</span>
               </div>
 
@@ -469,8 +701,8 @@ function MapApp() {
                 {filteredPlaces.length === 0 && (
                   <p className="empty-state">
                     {places.length === 0
-                      ? "Chưa có địa điểm để hiển thị."
-                      : "Không tìm thấy địa điểm."}
+                      ? text.noPlace
+                      : text.noMatch}
                   </p>
                 )}
               </div>
@@ -481,14 +713,19 @@ function MapApp() {
                 </span>
 
                 <div>
-                  <strong>Thuyết minh tự động</strong>
-                  <p>Nghe giới thiệu về địa điểm đang chọn.</p>
+                  <strong>{text.guideTitle}</strong>
+                  <p>{text.guideDescription}</p>
                 </div>
 
                 <button
                   className="round-button"
                   onClick={toggleAudio}
-                  aria-label={playing ? "Dừng thuyết minh" : "Phát thuyết minh"}
+                  disabled={selected?.translationMissing}
+                  aria-label={
+                    playing || audioLoading
+                      ? text.stopNarration
+                        : text.playNarration
+                  }
                 >
                   <Volume2 size={19} />
                 </button>
@@ -529,7 +766,7 @@ function MapApp() {
                       {place.category}
                       <br />
                       <button onClick={() => setSelected(place)}>
-                        Xem chi tiết
+                        {text.start}
                       </button>
                     </Popup>
                   </CircleMarker>
@@ -546,7 +783,7 @@ function MapApp() {
                       weight: 3,
                     }}
                   >
-                    <Popup>Vị trí hiện tại của bạn</Popup>
+                    <Popup>{text.currentPosition}</Popup>
                   </CircleMarker>
                 )}
 
@@ -555,13 +792,13 @@ function MapApp() {
 
               <div className="map-label">
                 <MapPin size={16} />
-                <span>Bán đảo Sơn Trà · Đà Nẵng</span>
+                <span>{text.mapLabel}</span>
               </div>
 
               <button
                 className="map-locate"
                 onClick={locateMe}
-                aria-label="Xác định vị trí của tôi"
+                aria-label={text.myLocation}
               >
                 <LocateFixed size={19} />
               </button>
@@ -571,30 +808,46 @@ function MapApp() {
 
         <section className="detail-section">
           <div className="detail-image">
+            <img
+              className="detail-image-photo"
+              src={selected?.imageUrl || "/Chùa-Linh-Ứng-Bãi-Bụt1.jpg"}
+              alt={selected?.name || text.category}
+              onError={(event) => {
+                event.currentTarget.style.display = "none";
+              }}
+            />
             <div className="detail-image-overlay">
-              <span>ĐIỂM ĐANG KHÁM PHÁ</span>
-              <h2>{selected?.name || "Chùa Linh Ứng"}</h2>
+              <span>{text.currentPlace}</span>
+              <h2>{selected?.name || text.category}</h2>
             </div>
           </div>
 
           <div className="detail-content">
-            <span className="eyebrow">EXPLORE & DISCOVER</span>
+            <span className="eyebrow">{text.detailKicker}</span>
 
-            <h2>{selected?.name || "Chùa Linh Ứng"}</h2>
+            <h2>{selected?.name || text.category}</h2>
 
             <span className="category-tag">
-              {selected?.category || "Điểm tham quan"}
+              {selected?.category || text.category}
             </span>
 
             <p>
               {selected?.description ||
-                "Chưa có nội dung thuyết minh. Vui lòng bổ sung dữ liệu POI hợp lệ trong backend."}
+                text.fallback}
             </p>
 
             <div className="detail-actions">
-              <button className="primary-button" onClick={toggleAudio}>
+              <button
+                className="primary-button"
+                onClick={toggleAudio}
+                disabled={selected?.translationMissing}
+              >
                 <Headphones size={18} />
-                {playing ? "Dừng thuyết minh" : "Nghe thuyết minh"}
+                {audioLoading
+                  ? text.creatingVoice
+                  : playing
+                    ? text.stopNarration
+                    : text.playNarration}
               </button>
 
               <button
@@ -602,14 +855,14 @@ function MapApp() {
                 onClick={() => setChatOpen(true)}
               >
                 <MessageCircle size={18} />
-                Hỏi hướng dẫn viên
+                {text.askGuide}
               </button>
             </div>
 
             <p className="demo-note">
               {selected
-                ? "Thông tin địa điểm được tải từ backend."
-                : "Đang hiển thị thông tin dự phòng vì chưa có POI hợp lệ."}
+                ? text.fromBackend
+                : text.noPlaces}
             </p>
           </div>
         </section>
@@ -618,15 +871,15 @@ function MapApp() {
       <footer className="footer">
         <div className="brand">
           <span className="brand-icon">🪷</span>
-          <strong>GPS – Chùa Linh Ứng</strong>
+          <strong>{text.appName}</strong>
         </div>
-        <span>Đồ án Công nghệ phần mềm · Web demo</span>
+        <span>{text.footer}</span>
       </footer>
 
       <button
         className="chat-fab"
         onClick={() => setChatOpen((open) => !open)}
-        aria-label={chatOpen ? "Đóng chatbot" : "Mở chatbot"}
+        aria-label={chatOpen ? "×" : text.chatbot}
       >
         {chatOpen ? <Menu size={23} /> : <MessageCircle size={23} />}
       </button>
@@ -637,13 +890,13 @@ function MapApp() {
             <span className="chat-avatar">🪷</span>
 
             <div>
-              <strong>Hướng dẫn viên AI</strong>
-              <small>Giao diện minh họa</small>
+              <strong>{text.chatbot}</strong>
+              <small>{text.chatbotDemo}</small>
             </div>
 
             <button
               onClick={() => setChatOpen(false)}
-              aria-label="Đóng chatbot"
+              aria-label={text.chatbot}
             >
               ✕
             </button>
@@ -651,8 +904,8 @@ function MapApp() {
 
           <div className="chat-body">
             <p className="chat-bubble">
-              Xin chào! Bạn muốn tìm hiểu điều gì về{" "}
-              {selected?.name || "Chùa Linh Ứng"}?
+              {text.chatGreeting}{" "}
+              {selected?.name || text.category}?
             </p>
 
             {answer && <p className="chat-bubble">{answer}</p>}
@@ -662,23 +915,116 @@ function MapApp() {
             <input
               value={question}
               onChange={(event) => setQuestion(event.target.value)}
-              placeholder="Nhập câu hỏi..."
-              aria-label="Nhập câu hỏi cho hướng dẫn viên"
+              placeholder={text.chatPlaceholder}
+              aria-label={text.chatPlaceholder}
             />
 
-            <button type="submit">Gửi</button>
+            <button type="submit">{text.send}</button>
           </form>
         </section>
       )}
     </div>
   );
 }
+function VisitorApp() {
+  const query = new URLSearchParams(window.location.search);
+  const initialLanguage = query.get("lang");
+  const [language, setLanguage] = useState(
+    supportedLanguageCodes.has(initialLanguage) ? initialLanguage : "",
+  );
+
+  useEffect(() => {
+    void recordVisit(language);
+  }, [language]);
+
+  useEffect(() => {
+    document.documentElement.lang = language || "vi";
+    document.title = language
+      ? messages[language].appName
+      : messages.vi.appName;
+  }, [language]);
+
+  function selectLanguage(nextLanguage) {
+    if (!supportedLanguageCodes.has(nextLanguage)) {
+      return;
+    }
+
+    if (sessionStorage.getItem("visitorPaid") !== "1") {
+      const checkoutUrl = new URL("/payment", window.location.origin);
+      checkoutUrl.searchParams.set("lang", nextLanguage);
+      if (query.get("source") === "qr") {
+        checkoutUrl.searchParams.set("source", "qr");
+      }
+      window.location.assign(checkoutUrl);
+      return;
+    }
+
+    const nextUrl = new URL("/", window.location.origin);
+    nextUrl.searchParams.set("lang", nextLanguage);
+    if (query.get("source") === "qr") {
+      nextUrl.searchParams.set("source", "qr");
+    }
+    window.history.replaceState(null, "", nextUrl);
+    setLanguage(nextLanguage);
+  }
+
+  function openLanguageSelection() {
+    const nextUrl = new URL("/", window.location.origin);
+    if (query.get("source") === "qr") {
+      nextUrl.searchParams.set("source", "qr");
+    }
+    window.history.replaceState(null, "", nextUrl);
+    setLanguage("");
+  }
+
+  return language ? (
+    sessionStorage.getItem("visitorPaid") === "1" ? (
+      <MapApp
+        language={language}
+        onChangeLanguage={selectLanguage}
+        onOpenLanguageSelection={openLanguageSelection}
+      />
+    ) : (
+      <RedirectToPayment language={language} source={query.get("source")} />
+    )
+  ) : (
+    <LanguageSelection onSelect={selectLanguage} />
+  );
+}
+
+function RedirectToPayment({ language, source }) {
+  useEffect(() => {
+    const url = new URL("/payment", window.location.origin);
+    url.searchParams.set("lang", language);
+    if (source === "qr") {
+      url.searchParams.set("source", "qr");
+    }
+    window.location.replace(url);
+  }, [language, source]);
+
+  return null;
+}
+
+function RedirectToHome() {
+  useEffect(() => {
+    window.location.replace("/");
+  }, []);
+
+  return null;
+}
+
 function App() {
+  if (
+    window.location.pathname === "/payments"
+  ) {
+    return <RedirectToHome />;
+  }
+
   if (window.location.pathname === "/admin") {
     return <AdminDashboard />;
   }
 
-  return <MapApp />;
+  return <VisitorApp />;
 }
 
 export default App;

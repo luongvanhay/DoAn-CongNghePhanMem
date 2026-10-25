@@ -845,9 +845,245 @@
   text-align: center;
 }
 
+.admin-content-form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 15px;
+  padding: 17px;
+  border: 1px solid #ececf4;
+  border-radius: 12px;
+  background: #fdfdff;
+}
+
+.admin-content-form label {
+  display: grid;
+  gap: 7px;
+  color: #55566d;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.admin-content-form label.wide {
+  grid-column: 1 / -1;
+}
+
+.admin-content-translations {
+  min-width: 0;
+  padding: 13px;
+  border: 1px solid #e6e4f1;
+  border-radius: 9px;
+  background: #fff;
+}
+
+.admin-content-translations summary {
+  color: #55566d;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.admin-content-translations > p {
+  margin: 9px 0 13px;
+  color: #77788c;
+  font-size: 11px;
+  line-height: 1.6;
+}
+
+.admin-content-translation-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.admin-content-translation-list label {
+  display: grid;
+  gap: 7px;
+  color: #55566d;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.admin-content-form input:not([type="checkbox"]),
+.admin-content-form textarea {
+  width: 100%;
+  min-width: 0;
+  padding: 10px 11px;
+  border: 1px solid #e1e2ed;
+  border-radius: 8px;
+  background: #fff;
+  color: #292743;
+  font: inherit;
+  font-size: 12px;
+}
+
+.admin-content-form textarea {
+  resize: vertical;
+  line-height: 1.6;
+}
+
+.admin-content-form input:focus,
+.admin-content-form textarea:focus {
+  border-color: #7968e7;
+  outline: 2px solid #7968e722;
+}
+
+.admin-content-checkbox {
+  display: flex !important;
+  align-items: center;
+  align-self: center;
+  gap: 9px !important;
+}
+
+.admin-content-checkbox input {
+  accent-color: #6958d1;
+}
+
+.admin-content-form-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 9px;
+}
+
+.admin-content-list-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 23px 0 13px;
+}
+
+.admin-content-list-heading h3 {
+  margin: 0;
+  color: #292743;
+  font-size: 13px;
+}
+
+.admin-content-list-heading h2 {
+  margin: 0;
+  color: #25243f;
+  font-size: 15px;
+}
+
+.admin-content-list-heading p {
+  margin: 7px 0 0;
+  color: #85899a;
+  font-size: 11px;
+  line-height: 1.6;
+}
+
+.admin-visitor-table-wrap {
+  overflow-x: auto;
+}
+
+.admin-visitor-table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+}
+
+.admin-visitor-table th,
+.admin-visitor-table td {
+  padding: 11px 10px;
+  border-bottom: 1px solid #f0f0f6;
+  color: #55566d;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.admin-visitor-table th {
+  color: #85899a;
+  font-weight: 700;
+}
+
+.admin-visitor-table code {
+  color: #5145a5;
+  font-size: 10px;
+}
+
+.admin-qr-panel {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+}
+
+.admin-qr-panel h2 {
+  margin: 0;
+  color: #25243f;
+  font-size: 15px;
+}
+
+.admin-qr-panel p {
+  max-width: 540px;
+  color: #85899a;
+  font-size: 11px;
+  line-height: 1.7;
+}
+
+.admin-qr-input {
+  display: grid;
+  gap: 7px;
+  color: #55566d;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.admin-qr-input input {
+  width: min(480px, 100%);
+  padding: 10px 11px;
+  border: 1px solid #e1e2ed;
+  border-radius: 8px;
+  font: inherit;
+  font-size: 12px;
+}
+
+.admin-qr-warning {
+  color: #9b6a24 !important;
+}
+
+.admin-qr-url {
+  display: block;
+  margin: 12px 0;
+  color: #6958d1;
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+
+.admin-qr-code {
+  flex-shrink: 0;
+  padding: 8px;
+  border: 1px solid #ececf4;
+  border-radius: 10px;
+  background: #fff;
+}
+
 @media (max-width: 700px) {
   .admin-poi-panel {
     padding: 17px;
+  }
+
+  .admin-qr-panel {
+    align-items: flex-start;
+    flex-direction: column-reverse;
+  }
+
+  .admin-content-form {
+    grid-template-columns: minmax(0, 1fr);
+    padding: 13px;
+  }
+
+  .admin-content-form label.wide {
+    grid-column: auto;
+  }
+
+  .admin-content-form-actions {
+    justify-content: stretch;
+  }
+
+  .admin-content-form-actions .admin-poi-button {
+    flex: 1;
   }
 
   .admin-poi-card {

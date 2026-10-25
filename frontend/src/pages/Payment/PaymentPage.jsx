@@ -1,122 +1,286 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
-  CreditCard,
-  Banknote,
-  ShieldCheck,
-  MapPin,
   ArrowLeft,
-  QrCode,
+  Banknote,
   CheckCircle2,
+  CreditCard,
+  ExternalLink,
+  MapPin,
+  QrCode,
+  RefreshCw,
+  ShieldCheck,
 } from "lucide-react";
+import { QRCodeSVG } from "qrcode.react";
+import { languages, supportedLanguageCodes } from "../../i18n";
 import "./PaymentPage.css";
 
 const TICKET_PRICE = 50000;
+const PAYMENT_WINDOW_SECONDS = 15 * 60;
+
+function getCheckoutLanguage() {
+  const requestedLanguage = new URLSearchParams(window.location.search).get("lang");
+  return supportedLanguageCodes.has(requestedLanguage) ? requestedLanguage : "vi";
+}
 
 export default function PaymentPage() {
+  const language = getCheckoutLanguage();
+  const selectedLanguage = languages.find((item) => item.code === language);
+  const [transactionCode, setTransactionCode] = useState("");
   const [method, setMethod] = useState("");
   const [claimCode, setClaimCode] = useState("");
-  const [transactionCode, setTransactionCode] = useState("");
+  const [paymentUrl, setPaymentUrl] = useState("");
+  const [expiresAt, setExpiresAt] = useState(null);
+  const [remainingSeconds, setRemainingSeconds] = useState(0);
+  const [status, setStatus] = useState("ready");
   const [message, setMessage] = useState("");
-  const [status, setStatus] = useState("select");
   const [loading, setLoading] = useState(false);
 
-  function chooseMethod(value) {
-    setMethod(value);
-    setMessage("");
-    setStatus("select");
-    setClaimCode("");
-    setTransactionCode("");
-  }
-
-  async function handleCreateCashPayment() {
+  async function createQrPayment() {
     setLoading(true);
     setMessage("");
+    setPaymentUrl("");
 
     try {
       const response = await fetch("/api/payments", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           amount: TICKET_PRICE,
-          method: "CASH",
+          method: "VNPAY",
+          language,
+          source: new URLSearchParams(window.location.search).get("source"),
         }),
       });
-
       const data = await response.json().catch(() => ({}));
 
       if (!response.ok) {
-        throw new Error(data.message || "Không thể tạo giao dịch.");
+        throw new Error(data.message || "Không thể tạo mã QR thanh toán.");
+      }
+      if (!data.transactionCode || !data.paymentUrl) {
+        throw new Error("Máy chủ chưa trả về đủ thông tin thanh toán.");
       }
 
+      const expiration = data.expiresAt
+        ? new Date(data.expiresAt).toISOString()
+        : new Date(Date.now() + PAYMENT_WINDOW_SECONDS * 1000).toISOString();
       setTransactionCode(data.transactionCode);
+      setMethod("online");
+      setPaymentUrl(data.paymentUrl);
+      setExpiresAt(expiration);
+      setRemainingSeconds(PAYMENT_WINDOW_SECONDS);
       setStatus("pending");
-      setMessage(
-        "Đã tạo giao dịch. Vui lòng đưa mã giao dịch cho nhân viên và thanh toán 50.000 đồng. Sau khi nhân viên xác nhận, bạn sẽ nhận Claim code.",
-      );
     } catch (error) {
-      setStatus("notice");
-      setMessage(
-        error.message || "Không thể kết nối máy chủ. Vui lòng thử lại.",
-      );
+      setStatus("error");
+      setMessage(error.message || "Không thể kết nối máy chủ thanh toán.");
     } finally {
       setLoading(false);
     }
   }
 
-  async function handleOnlinePayment() {
-    setStatus("notice");
-    setMessage(
-      "Payoo chưa được tích hợp với máy chủ. Vui lòng chọn thanh toán tiền mặt hoặc thử lại khi cổng Payoo đã được cấu hình.",
-    );
+  async function createCashPayment() {
+    setLoading(true);
+    setMessage("");
+    setClaimCode("");
+
+    try {
+      const response = await fetch("/api/payments", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          amount: TICKET_PRICE,
+          method: "CASH",
+          language,
+          source: new URLSearchParams(window.location.search).get("source"),
+        }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(data.message || "Không thể tạo giao dịch tiền mặt.");
+      }
+
+      setTransactionCode(data.transactionCode);
+      setMethod("cash");
+      setStatus("pending");
+      setMessage(
+        "Đưa mã giao dịch cho nhân viên và thanh toán 50.000 đồng. Sau khi nhân viên xác nhận, hãy nhập mã xác nhận được cung cấp.",
+      );
+    } catch (error) {
+      setStatus("error");
+      setMessage(error.message || "Không thể kết nối máy chủ thanh toán.");
+    } finally {
+      setLoading(false);
+    }
   }
 
-  async function handleClaimSubmit(event) {
+  async function submitClaimCode(event) {
     event.preventDefault();
-
-    if (!transactionCode) {
-      setMessage("Vui lòng tạo giao dịch tiền mặt trước.");
-      return;
-    }
-
-    if (!claimCode.trim()) {
-      setMessage("Vui lòng nhập Claim code do nhân viên cung cấp.");
-      return;
-    }
-
     setLoading(true);
     setMessage("");
 
     try {
       const response = await fetch("/api/payments/claim", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          claimCode: claimCode.trim(),
-        }),
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ claimCode: claimCode.trim() }),
       });
-
       const data = await response.json().catch(() => ({}));
-
       if (!response.ok) {
-        throw new Error(data.message || "Không thể xác thực Claim code.");
+        throw new Error(data.message || "Không thể xác thực mã xác nhận.");
       }
 
       setStatus("success");
       setMessage(
-        data.message || "Xác thực thành công. Quyền truy cập đã được cấp.",
+        data.message || "Xác thực thành công. Bạn có thể vào trang tham quan.",
       );
     } catch (error) {
-      setStatus("notice");
-      setMessage(
-        error.message || "Không thể kết nối máy chủ. Vui lòng thử lại.",
-      );
+      setStatus("error");
+      setMessage(error.message || "Không thể xác thực mã xác nhận.");
     } finally {
       setLoading(false);
     }
+  }
+
+  useEffect(() => {
+    const returnedTransactionCode = new URLSearchParams(
+      window.location.search,
+    ).get("transactionCode");
+    if (!returnedTransactionCode) {
+      return undefined;
+    }
+
+    let cancelled = false;
+
+    async function loadReturnedPayment() {
+      setLoading(true);
+      try {
+        const response = await fetch(
+          `/api/payments/${encodeURIComponent(returnedTransactionCode)}`,
+        );
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          throw new Error(data.message || "Không thể kiểm tra giao dịch.");
+        }
+        if (cancelled) {
+          return;
+        }
+
+        setTransactionCode(data.transactionCode);
+        setMethod(data.method === "VNPAY" ? "online" : "cash");
+        if (data.status === "PAID" && data.accessGranted) {
+          setStatus("success");
+          setMessage("Thanh toán thành công. Bạn có thể vào trang tham quan.");
+        } else if (data.status === "FAILED") {
+          setStatus("error");
+          setMessage("Giao dịch chưa hoàn tất hoặc đã bị hủy.");
+        } else {
+          setStatus("pending");
+          setMessage("Đang chờ VNPay xác nhận giao dịch của bạn.");
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setStatus("error");
+          setMessage(error.message || "Không thể kiểm tra giao dịch.");
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
+    }
+
+    void loadReturnedPayment();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (method !== "online" || status !== "pending" || !transactionCode) {
+      return undefined;
+    }
+
+    let cancelled = false;
+    let timeoutId;
+
+    async function checkPayment() {
+      try {
+        const response = await fetch(
+          `/api/payments/${encodeURIComponent(transactionCode)}`,
+        );
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          throw new Error(data.message || "Không thể kiểm tra giao dịch.");
+        }
+        if (cancelled) {
+          return;
+        }
+
+        if (data.status === "PAID" && data.accessGranted) {
+          setStatus("success");
+          setMessage("Thanh toán thành công. Bạn có thể vào trang tham quan.");
+          return;
+        }
+        if (data.status === "FAILED") {
+          setStatus("error");
+          setMessage("Giao dịch chưa hoàn tất hoặc đã bị hủy.");
+          return;
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setMessage(
+            error.message || "Không thể kiểm tra trạng thái thanh toán.",
+          );
+        }
+      }
+
+      if (!cancelled) {
+        timeoutId = window.setTimeout(checkPayment, 3000);
+      }
+    }
+
+    timeoutId = window.setTimeout(checkPayment, 3000);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timeoutId);
+    };
+  }, [method, status, transactionCode]);
+
+  useEffect(() => {
+    if (status !== "pending" || !expiresAt) {
+      return undefined;
+    }
+
+    function updateCountdown() {
+      const seconds = Math.max(
+        0,
+        Math.ceil((new Date(expiresAt).getTime() - Date.now()) / 1000),
+      );
+      setRemainingSeconds(seconds);
+      if (seconds === 0) {
+        setStatus("expired");
+        setMessage("Mã thanh toán đã hết hạn. Hãy tạo mã QR mới.");
+      }
+    }
+
+    updateCountdown();
+    const intervalId = window.setInterval(updateCountdown, 1000);
+    return () => window.clearInterval(intervalId);
+  }, [expiresAt, status]);
+
+  function continueToVisitorSite() {
+    sessionStorage.setItem("visitorPaid", "1");
+    const visitorUrl = new URL("/", window.location.origin);
+    visitorUrl.searchParams.set("lang", language);
+    if (new URLSearchParams(window.location.search).get("source") === "qr") {
+      visitorUrl.searchParams.set("source", "qr");
+    }
+    window.location.assign(visitorUrl);
+  }
+
+  function formatRemainingTime(seconds) {
+    const minutes = Math.floor(seconds / 60);
+    const remainder = seconds % 60;
+    return `${String(minutes).padStart(2, "0")}:${String(remainder).padStart(2, "0")}`;
   }
 
   return (
@@ -131,7 +295,6 @@ export default function PaymentPage() {
             <span>HỆ THỐNG THAM QUAN</span>
           </div>
         </div>
-
         <span className="payment-secure">
           <ShieldCheck size={16} />
           Thanh toán an toàn
@@ -149,155 +312,212 @@ export default function PaymentPage() {
             Vui lòng chọn phương thức thanh toán để sử dụng bản đồ tham quan và
             khám phá các địa điểm tại Chùa Linh Ứng.
           </p>
-          <p>
+          <p className="payment-price">
             Giá vé: <strong>50.000 đồng/lượt</strong>
           </p>
         </div>
 
         <section className="payment-card">
-          <h2>Chọn phương thức thanh toán</h2>
-          <p className="payment-description">
-            Chọn một trong hai hình thức bên dưới.
-          </p>
-
-          <button
-            type="button"
-            className={`payment-option ${
-              method === "online" ? "selected" : ""
-            }`}
-            onClick={() => chooseMethod("online")}
-            disabled={loading || status === "success"}
-          >
-            <span className="payment-option-icon online">
-              <CreditCard size={24} />
-            </span>
-            <span className="payment-option-text">
-              <strong>Thanh toán trực tuyến</strong>
-              <span>Thanh toán qua cổng Payoo</span>
-            </span>
-            <span className="payment-radio">
-              {method === "online" ? "✓" : ""}
-            </span>
-          </button>
-
-          <button
-            type="button"
-            className={`payment-option ${method === "cash" ? "selected" : ""}`}
-            onClick={() => chooseMethod("cash")}
-            disabled={loading || status === "success"}
-          >
-            <span className="payment-option-icon cash">
-              <Banknote size={24} />
-            </span>
-            <span className="payment-option-text">
-              <strong>Thanh toán tiền mặt</strong>
-              <span>Nhận mã xác nhận từ nhân viên</span>
-            </span>
-            <span className="payment-radio">
-              {method === "cash" ? "✓" : ""}
-            </span>
-          </button>
-
-          {method === "online" && (
-            <div className="payment-action-panel">
-              <p>
-                Giá vé là 50.000 đồng/lượt. Cổng Payoo hiện chưa được kết nối
-                với máy chủ.
-              </p>
+          {status === "success" ? (
+            <div className="payment-success">
+              <CheckCircle2 size={48} />
+              <h2>Thanh toán thành công</h2>
+              <p>{message}</p>
               <button
                 type="button"
                 className="payment-primary-button"
-                onClick={handleOnlinePayment}
-                disabled={loading}
+                onClick={continueToVisitorSite}
               >
-                Tiếp tục thanh toán
+                Vào trang tham quan
               </button>
             </div>
-          )}
+          ) : (
+            <>
+              <h2>Chọn phương thức thanh toán</h2>
+              <p className="payment-description">
+                Chọn một trong hai hình thức bên dưới.
+              </p>
 
-          {method === "cash" && status !== "success" && (
-            <div className="payment-action-panel">
-              {!transactionCode ? (
-                <>
-                  <p>
-                    Tạo giao dịch trước, sau đó đưa mã giao dịch cho nhân viên
-                    tại điểm tham quan.
-                  </p>
-                  <button
-                    type="button"
-                    className="payment-primary-button"
-                    onClick={handleCreateCashPayment}
-                    disabled={loading}
-                  >
-                    {loading
-                      ? "Đang tạo giao dịch..."
-                      : "Tạo giao dịch tiền mặt"}
-                  </button>
-                </>
-              ) : (
-                <>
-                  <p>Mã giao dịch của bạn:</p>
-                  <strong>{transactionCode}</strong>
-                  <p>
-                    Số tiền cần thanh toán: <strong>50.000 đồng</strong>
-                  </p>
-                  <p>
-                    Sau khi nhân viên xác nhận đã thu tiền, hãy nhập Claim code
-                    mà nhân viên cung cấp.
-                  </p>
+              <div className="payment-method-options">
+                <button
+                  type="button"
+                  className={`payment-option ${method === "online" ? "selected" : ""}`}
+                  onClick={() => setMethod("online")}
+                  disabled={loading || Boolean(transactionCode)}
+                >
+                  <span className="payment-option-icon online">
+                    <CreditCard size={22} />
+                  </span>
+                  <span className="payment-option-text">
+                    <strong>Thanh toán trực tuyến</strong>
+                    <span>Quét QR ngân hàng qua cổng VNPay</span>
+                  </span>
+                  <span className="payment-radio">{method === "online" ? "✓" : ""}</span>
+                </button>
+                <button
+                  type="button"
+                  className={`payment-option ${method === "cash" ? "selected" : ""}`}
+                  onClick={() => setMethod("cash")}
+                  disabled={loading || Boolean(transactionCode)}
+                >
+                  <span className="payment-option-icon cash">
+                    <Banknote size={22} />
+                  </span>
+                  <span className="payment-option-text">
+                    <strong>Thanh toán tiền mặt</strong>
+                    <span>Nhận mã xác nhận từ nhân viên</span>
+                  </span>
+                  <span className="payment-radio">{method === "cash" ? "✓" : ""}</span>
+                </button>
+              </div>
 
-                  <form onSubmit={handleClaimSubmit}>
-                    <label htmlFor="claimCode">Mã xác nhận (Claim code)</label>
-                    <input
-                      id="claimCode"
-                      type="text"
-                      value={claimCode}
-                      onChange={(event) => setClaimCode(event.target.value)}
-                      placeholder="Nhập mã do nhân viên cung cấp"
-                      autoComplete="off"
-                      disabled={loading}
-                    />
+              {method === "online" && (
+                <>
+                  <p className="payment-description">
+                    Quét mã bằng ứng dụng ngân hàng hỗ trợ VNPay QR. Chỉ giao dịch
+                    được máy chủ xác nhận mới mở quyền truy cập.
+                  </p>
+                  {status === "pending" && paymentUrl ? (
+                    <div className="payment-qr-panel">
+                      <div className="payment-qr-frame">
+                        <QRCodeSVG
+                          value={paymentUrl}
+                          size={228}
+                          level="M"
+                          includeMargin
+                          title={`Mã thanh toán VNPay ${transactionCode}`}
+                        />
+                      </div>
+                      <strong className="payment-qr-amount">50.000 đồng</strong>
+                      <p className="payment-qr-instructions">
+                        Dùng camera điện thoại quét mã để mở trang thanh toán VNPay,
+                        sau đó chọn ngân hàng được hỗ trợ.
+                      </p>
+                      <p className="payment-qr-expiry">
+                        Mã hết hạn sau{" "}
+                        <strong>{formatRemainingTime(remainingSeconds)}</strong>
+                      </p>
+                      <p className="payment-transaction-code">
+                        Mã giao dịch: <strong>{transactionCode}</strong>
+                      </p>
+                      <a
+                        className="payment-same-device-link"
+                        href={paymentUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        <ExternalLink size={15} />
+                        Thanh toán trên thiết bị này
+                      </a>
+                      <p className="payment-poll-status">
+                        Đang tự động kiểm tra trạng thái thanh toán…
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="payment-action-panel">
+                      <p>
+                        Ngôn ngữ: <strong>{selectedLanguage?.nativeName}</strong>
+                        {" · "}Số tiền: <strong>50.000 đồng</strong>
+                      </p>
+                      <button
+                        type="button"
+                        className="payment-primary-button"
+                        onClick={createQrPayment}
+                        disabled={loading}
+                      >
+                        {loading ? "Đang tạo giao dịch..." : "Tạo mã QR thanh toán"}
+                      </button>
+                    </div>
+                  )}
+                  {message && status !== "pending" && (
+                    <div className="payment-message" role="alert">
+                      <span>{message}</span>
+                    </div>
+                  )}
+                  {status === "expired" && (
                     <button
-                      type="submit"
+                      type="button"
                       className="payment-primary-button"
+                      onClick={createQrPayment}
                       disabled={loading}
                     >
-                      {loading ? "Đang xác thực..." : "Xác thực mã"}
+                      <RefreshCw size={16} />
+                      Tạo mã QR mới
                     </button>
-                  </form>
+                  )}
                 </>
               )}
-            </div>
-          )}
 
-          {message && (
-            <div className="payment-message" role="status">
-              {(status === "success" || status === "pending") && (
-                <CheckCircle2 size={18} />
+              {method === "cash" && (
+                <div className="payment-action-panel">
+                  {!transactionCode ? (
+                    <>
+                      <p>
+                        Tạo giao dịch trước, sau đó đưa mã giao dịch cho nhân viên
+                        tại điểm tham quan.
+                      </p>
+                      <button
+                        type="button"
+                        className="payment-primary-button"
+                        onClick={createCashPayment}
+                        disabled={loading}
+                      >
+                        {loading ? "Đang tạo giao dịch..." : "Tạo giao dịch tiền mặt"}
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <p>Mã giao dịch của bạn:</p>
+                      <strong className="payment-transaction-code-value">{transactionCode}</strong>
+                      <p>
+                        Số tiền cần thanh toán: <strong>50.000 đồng</strong>
+                      </p>
+                      <p>
+                        Sau khi nhân viên xác nhận đã thu tiền, hãy nhập Claim code
+                        mà nhân viên cung cấp.
+                      </p>
+                      <form className="payment-claim-form" onSubmit={submitClaimCode}>
+                        <label htmlFor="claim-code">Mã xác nhận (Claim code)</label>
+                        <input
+                          id="claim-code"
+                          value={claimCode}
+                          onChange={(event) => setClaimCode(event.target.value)}
+                          autoComplete="off"
+                          disabled={loading}
+                          placeholder="Nhập mã do nhân viên cung cấp"
+                        />
+                        <button
+                          type="submit"
+                          className="payment-primary-button"
+                          disabled={loading || !claimCode.trim()}
+                        >
+                          {loading ? "Đang xác thực..." : "Xác thực mã"}
+                        </button>
+                      </form>
+                    </>
+                  )}
+                  {message && (
+                    <div className="payment-message" role="alert">
+                      <span>{message}</span>
+                    </div>
+                  )}
+                </div>
               )}
-              <span>{message}</span>
-            </div>
-          )}
 
-          {status === "success" && (
-            <div className="payment-action-panel">
-              <button
-                type="button"
-                className="payment-primary-button"
-                onClick={() => {
-                  window.location.href = "/";
-                }}
-              >
-                Tiếp tục tham quan
-              </button>
-            </div>
+              {!method && (
+                <div className="payment-action-panel">
+                  <p>Vui lòng chọn phương thức thanh toán ở trên.</p>
+                </div>
+              )}
+            </>
           )}
 
           <div className="payment-note">
             <ShieldCheck size={18} />
             <span>
-              Quyền truy cập chỉ được cấp sau khi máy chủ xác minh giao dịch đã
-              thanh toán và Claim code hợp lệ.
+              Thanh toán online được xác nhận tự động; thanh toán tiền mặt chỉ
+              được cấp quyền sau khi máy chủ xác minh giao dịch đã thanh toán và
+              Claim code hợp lệ.
             </span>
           </div>
         </section>
@@ -306,14 +526,13 @@ export default function PaymentPage() {
           type="button"
           className="payment-back-button"
           onClick={() => {
-            window.location.href = "/";
+            window.location.assign("/");
           }}
         >
           <ArrowLeft size={17} />
           Quay lại bản đồ
         </button>
       </section>
-
       <footer className="payment-footer">
         © {new Date().getFullYear()} Chùa Linh Ứng · Hệ thống tham quan
       </footer>

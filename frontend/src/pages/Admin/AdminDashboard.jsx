@@ -1,16 +1,22 @@
 import { useCallback, useEffect, useState } from "react";
+import { QRCodeSVG } from "qrcode.react";
+import { languages } from "../../i18n";
 import "./AdminDashboard.css";
 
 // ==================== CẤU HÌNH API ====================
 
 // API lấy thống kê lượt truy cập website
 const STATS_URL = "/api/content/visits/stats";
+const VISITOR_LOG_URL = "/api/content/visits/recent";
 
 // API đăng nhập tài khoản
 const LOGIN_URL = "/api/auth/login";
 
 // API lấy danh sách hồ sơ POI đang chờ Admin duyệt
 const PENDING_URL = "/api/auth/poi-owner/applications/pending";
+
+// API quản lý địa điểm và nội dung thuyết minh
+const CONTENTS_URL = "/api/content/contents";
 
 // Giá trị mặc định của các thống kê
 const initialStats = {
@@ -486,6 +492,786 @@ function PoiApplications({ token }) {
   );
 }
 
+// ==================== QUẢN LÝ ĐỊA ĐIỂM VÀ THUYẾT MINH ====================
+
+const emptyContentForm = {
+  title: "",
+  location: "",
+  body: "",
+  sourceLanguage: "vi",
+  translations: [],
+  latitude: "",
+  longitude: "",
+  triggerRadius: 30,
+  imageUrl: "",
+  audioPriority: 0,
+  active: true,
+};
+
+function ContentManager({ token }) {
+  const [contents, setContents] = useState([]);
+  const [form, setForm] = useState(emptyContentForm);
+  const [editingId, setEditingId] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const [message, setMessage] = useState("");
+
+  const loadContents = useCallback(async () => {
+    setLoading(true);
+    setError("");
+
+    try {
+      const response = await fetch(CONTENTS_URL, {
+        headers: { Accept: "application/json" },
+      });
+      const data = await readResponse(response);
+
+      if (!Array.isArray(data)) {
+        throw new Error("Dữ liệu địa điểm trả về không đúng định dạng.");
+      }
+
+      setContents(data);
+    } catch (err) {
+      setError(err.message || "Không tải được danh sách địa điểm.");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    const timerId = setTimeout(loadContents, 0);
+    return () => clearTimeout(timerId);
+  }, [loadContents]);
+
+  function startEditing(content) {
+    setEditingId(content.id);
+    setForm({
+      ...emptyContentForm,
+      title: content.title || "",
+      location: content.location || "",
+      body: content.body || "",
+      sourceLanguage: content.sourceLanguage || "vi",
+      translations: Array.isArray(content.translations)
+        ? content.translations
+        : [],
+      latitude: content.latitude ?? "",
+      longitude: content.longitude ?? "",
+      triggerRadius: content.triggerRadius ?? 30,
+      imageUrl: content.imageUrl || "",
+      audioPriority: content.audioPriority ?? 0,
+      active: content.active !== false,
+    });
+    setMessage("");
+    setError("");
+  }
+
+  function resetForm() {
+    setEditingId("");
+    setForm(emptyContentForm);
+    setMessage("");
+    setError("");
+  }
+
+  function updateTranslation(languageCode, field, value) {
+    setForm((current) => {
+      const existing = current.translations.find(
+        (translation) => translation.languageCode === languageCode,
+      );
+      const translations = existing
+        ? current.translations.map((translation) =>
+            translation.languageCode === languageCode
+              ? { ...translation, [field]: value }
+              : translation,
+          )
+        : [
+            ...current.translations,
+            {
+              languageCode,
+              title: current.title,
+              description: "",
+              [field]: value,
+            },
+          ];
+
+      return { ...current, translations };
+    });
+  }
+
+  async function handleSubmit(event) {
+    event.preventDefault();
+    setSaving(true);
+    setError("");
+    setMessage("");
+
+    const payload = {
+      ...form,
+      title: form.title.trim(),
+      location: form.location.trim(),
+      body: form.body.trim(),
+      sourceLanguage: form.sourceLanguage.trim().toLowerCase(),
+      translations: form.translations
+        .filter(
+          (translation) =>
+            translation.languageCode !==
+              form.sourceLanguage.trim().toLowerCase() &&
+            translation.description?.trim(),
+        )
+        .map((translation) => ({
+          languageCode: translation.languageCode,
+          title: translation.title?.trim() || form.title.trim(),
+          description: translation.description.trim(),
+          audioUrl: translation.audioUrl || null,
+        })),
+      latitude: Number(form.latitude),
+      longitude: Number(form.longitude),
+      triggerRadius: Number(form.triggerRadius),
+      audioPriority: Number(form.audioPriority),
+    };
+    const url = editingId
+      ? `${CONTENTS_URL}/${encodeURIComponent(editingId)}`
+      : CONTENTS_URL;
+
+    try {
+      const response = await fetch(url, {
+        method: editingId ? "PUT" : "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(payload),
+      });
+      const savedContent = await readResponse(response);
+
+      setContents((current) =>
+        editingId
+          ? current.map((content) =>
+              content.id === savedContent.id ? savedContent : content,
+            )
+          : [savedContent, ...current],
+      );
+      setMessage(
+        editingId
+          ? "Đã cập nhật địa điểm và nội dung thuyết minh."
+          : "Đã thêm địa điểm và lưu vào MongoDB.",
+      );
+      setEditingId("");
+      setForm(emptyContentForm);
+    } catch (err) {
+      setError(err.message || "Không thể lưu nội dung địa điểm.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <section className="admin-poi-section" id="manage-content">
+      <article className="admin-poi-panel">
+        <div className="admin-poi-heading">
+          <div>
+            <h2>Quản lý địa điểm và thuyết minh</h2>
+            <p>
+              Thêm địa điểm mới hoặc chỉnh sửa nội dung đang hiển thị trên bản
+              đồ. Thay đổi được lưu trong MongoDB.
+            </p>
+          </div>
+          <span className="admin-poi-count">{contents.length} địa điểm</span>
+        </div>
+
+        {message && (
+          <div className="admin-poi-message" role="status">
+            {message}
+          </div>
+        )}
+        {error && (
+          <div className="admin-poi-message error" role="alert">
+            {error}
+          </div>
+        )}
+
+        <form className="admin-content-form" onSubmit={handleSubmit}>
+          <label>
+            Tên địa điểm
+            <input
+              value={form.title}
+              onChange={(event) =>
+                setForm({ ...form, title: event.target.value })
+              }
+              maxLength={255}
+              required
+            />
+          </label>
+
+          <label>
+            Loại địa điểm / địa chỉ
+            <input
+              value={form.location}
+              onChange={(event) =>
+                setForm({ ...form, location: event.target.value })
+              }
+              maxLength={255}
+            />
+          </label>
+
+          <label className="wide">
+            Nội dung thuyết minh
+            <textarea
+              value={form.body}
+              onChange={(event) =>
+                setForm({ ...form, body: event.target.value })
+              }
+              rows={5}
+              required
+            />
+          </label>
+
+          <details className="admin-content-translations wide">
+            <summary>
+              Bản dịch thuyết minh (
+              {form.translations.filter((translation) =>
+                translation.description?.trim(),
+              ).length}
+              )
+            </summary>
+            <p>
+              Nhập lời thuyết minh đã dịch cho từng ngôn ngữ. Bản dịch được
+              lưu trong MongoDB và sẽ được dùng để hiển thị, phát âm thanh.
+              Ngôn ngữ chưa có bản dịch sẽ cần dịch vụ dịch tự động.
+            </p>
+            <div className="admin-content-translation-list">
+              {languages
+                .filter(
+                  (language) =>
+                    language.code !==
+                    form.sourceLanguage.trim().toLowerCase(),
+                )
+                .map((language) => {
+                  const translation = form.translations.find(
+                    (item) => item.languageCode === language.code,
+                  );
+
+                  return (
+                    <label key={language.code}>
+                      Thuyết minh · {language.label}
+                      <textarea
+                        value={translation?.description || ""}
+                        onChange={(event) =>
+                          updateTranslation(
+                            language.code,
+                            "description",
+                            event.target.value,
+                          )
+                        }
+                        rows={3}
+                        placeholder={`Nhập nội dung bằng ${language.label}`}
+                      />
+                    </label>
+                  );
+                })}
+            </div>
+          </details>
+
+          <label>
+            Ngôn ngữ nội dung
+            <input
+              value={form.sourceLanguage}
+              onChange={(event) =>
+                setForm({ ...form, sourceLanguage: event.target.value })
+              }
+              minLength={2}
+              maxLength={10}
+              required
+            />
+          </label>
+
+          <label>
+            Vĩ độ
+            <input
+              type="number"
+              value={form.latitude}
+              onChange={(event) =>
+                setForm({ ...form, latitude: event.target.value })
+              }
+              min="-90"
+              max="90"
+              step="any"
+              required
+            />
+          </label>
+
+          <label>
+            Kinh độ
+            <input
+              type="number"
+              value={form.longitude}
+              onChange={(event) =>
+                setForm({ ...form, longitude: event.target.value })
+              }
+              min="-180"
+              max="180"
+              step="any"
+              required
+            />
+          </label>
+
+          <label>
+            Bán kính kích hoạt (m)
+            <input
+              type="number"
+              value={form.triggerRadius}
+              onChange={(event) =>
+                setForm({ ...form, triggerRadius: event.target.value })
+              }
+              min="1"
+              required
+            />
+          </label>
+
+          <label>
+            Đường dẫn ảnh (không bắt buộc)
+            <input
+              type="url"
+              value={form.imageUrl}
+              onChange={(event) =>
+                setForm({ ...form, imageUrl: event.target.value })
+              }
+              maxLength={500}
+            />
+          </label>
+
+          <label className="admin-content-checkbox">
+            <input
+              type="checkbox"
+              checked={form.active}
+              onChange={(event) =>
+                setForm({ ...form, active: event.target.checked })
+              }
+            />
+            Địa điểm đang hoạt động
+          </label>
+
+          <div className="admin-content-form-actions">
+            <button
+              className="admin-poi-button approve"
+              type="submit"
+              disabled={saving}
+            >
+              {saving
+                ? "Đang lưu..."
+                : editingId
+                  ? "Lưu thay đổi"
+                  : "Thêm địa điểm"}
+            </button>
+            {editingId && (
+              <button
+                className="admin-poi-button reject"
+                type="button"
+                onClick={resetForm}
+                disabled={saving}
+              >
+                Hủy chỉnh sửa
+              </button>
+            )}
+          </div>
+        </form>
+
+        <div className="admin-content-list-heading">
+          <h3>Địa điểm đã lưu</h3>
+          <button
+            className="admin-refresh"
+            type="button"
+            onClick={loadContents}
+            disabled={loading || saving}
+          >
+            ↻ {loading ? "Đang tải..." : "Làm mới"}
+          </button>
+        </div>
+
+        {loading ? (
+          <div className="admin-poi-empty">Đang tải danh sách địa điểm...</div>
+        ) : contents.length === 0 ? (
+          <div className="admin-poi-empty">Chưa có địa điểm nào.</div>
+        ) : (
+          <div className="admin-poi-list">
+            {contents.map((content) => (
+              <article className="admin-poi-card" key={content.id}>
+                <div className="admin-poi-card-header">
+                  <div>
+                    <h3>{content.title || "Địa điểm chưa có tên"}</h3>
+                    <p className="admin-poi-contact">
+                      {content.location || "Chưa có địa chỉ"} ·{" "}
+                      {content.active === false ? "Đang ẩn" : "Đang hoạt động"}
+                    </p>
+                  </div>
+                  <button
+                    className="admin-poi-button approve"
+                    type="button"
+                    onClick={() => startEditing(content)}
+                  >
+                    Sửa nội dung
+                  </button>
+                </div>
+                <div className="admin-poi-details">
+                  <div className="admin-poi-detail">
+                    <strong>Tọa độ</strong>
+                    <span>
+                      {content.latitude ?? "—"}, {content.longitude ?? "—"}
+                    </span>
+                  </div>
+                  <div className="admin-poi-detail">
+                    <strong>Thuyết minh</strong>
+                    <span>{content.body || "Chưa có nội dung."}</span>
+                  </div>
+                </div>
+              </article>
+            ))}
+          </div>
+        )}
+      </article>
+    </section>
+  );
+}
+
+function VisitorQrCard() {
+  const [siteUrl, setSiteUrl] = useState(window.location.origin);
+  const visitorUrl = (() => {
+    try {
+      const url = new URL("/", siteUrl);
+      url.searchParams.set("source", "qr");
+      return url.toString();
+    } catch {
+      return "";
+    }
+  })();
+
+  function downloadQrCode() {
+    const svg = document.querySelector("#visitor-qr-code svg");
+    if (!svg) {
+      return;
+    }
+
+    const svgBlob = new Blob([svg.outerHTML], {
+      type: "image/svg+xml;charset=utf-8",
+    });
+    const downloadUrl = URL.createObjectURL(svgBlob);
+    const link = document.createElement("a");
+    link.href = downloadUrl;
+    link.download = "son-tra-visitor-qr.svg";
+    link.click();
+    window.setTimeout(() => URL.revokeObjectURL(downloadUrl), 1000);
+  }
+
+  return (
+    <section className="admin-poi-section" aria-labelledby="visitor-qr-title">
+      <article className="admin-poi-panel admin-qr-panel">
+        <div>
+          <h2 id="visitor-qr-title">Mã QR dành cho khách tham quan</h2>
+          <p>
+            Khách quét mã sẽ mở trang chọn một trong 15 ngôn ngữ trước khi xem
+            bản đồ và nghe thuyết minh.
+          </p>
+          <label className="admin-qr-input">
+            Địa chỉ website khách có thể truy cập
+            <input
+              type="url"
+              value={siteUrl}
+              onChange={(event) => setSiteUrl(event.target.value)}
+              placeholder="https://ten-mien-cua-ban"
+              required
+            />
+          </label>
+          <p className="admin-qr-warning">
+            Không dùng localhost khi in QR cho khách; hãy nhập tên miền đã
+            triển khai hoặc địa chỉ mạng mà điện thoại khách truy cập được.
+          </p>
+          <a className="admin-qr-url" href={visitorUrl || undefined} target="_blank" rel="noreferrer">
+            {visitorUrl}
+          </a>
+          <button
+            className="admin-poi-button approve"
+            type="button"
+            onClick={downloadQrCode}
+            disabled={!visitorUrl}
+          >
+            Tải mã QR để in
+          </button>
+        </div>
+        <div id="visitor-qr-code" className="admin-qr-code">
+          {visitorUrl ? (
+            <QRCodeSVG value={visitorUrl} size={180} level="H" includeMargin />
+          ) : (
+            <span>Nhập URL hợp lệ</span>
+          )}
+        </div>
+      </article>
+    </section>
+  );
+}
+
+function VisitorLog({ token }) {
+  const [visits, setVisits] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  const loadVisits = useCallback(async () => {
+    setLoading(true);
+    setError("");
+
+    try {
+      const response = await fetch(VISITOR_LOG_URL, {
+        headers: {
+          Accept: "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      const data = await readResponse(response);
+
+      if (!Array.isArray(data)) {
+        throw new Error("Dữ liệu lượt truy cập không đúng định dạng.");
+      }
+
+      setVisits(data);
+    } catch (err) {
+      setError(err.message || "Không tải được danh sách lượt truy cập.");
+    } finally {
+      setLoading(false);
+    }
+  }, [token]);
+
+  useEffect(() => {
+    const timerId = setTimeout(() => {
+      void loadVisits();
+    }, 0);
+
+    return () => clearTimeout(timerId);
+  }, [loadVisits]);
+
+  return (
+    <section className="admin-poi-section" aria-labelledby="visitor-log-title">
+      <article className="admin-poi-panel">
+        <div className="admin-content-list-heading">
+          <div>
+            <h2 id="visitor-log-title">Khách đã quét QR / truy cập</h2>
+            <p>
+              Mã khách được tạo ngẫu nhiên trên trình duyệt; không thu thập
+              thông tin tài khoản cá nhân.
+            </p>
+          </div>
+          <button
+            className="admin-refresh"
+            type="button"
+            onClick={loadVisits}
+            disabled={loading}
+          >
+            ↻ {loading ? "Đang tải..." : "Làm mới"}
+          </button>
+        </div>
+
+        {error && (
+          <div className="admin-poi-message error" role="alert">
+            {error}
+          </div>
+        )}
+
+        {loading ? (
+          <div className="admin-poi-empty">Đang tải lịch sử truy cập...</div>
+        ) : visits.length === 0 ? (
+          <div className="admin-poi-empty">
+            Chưa ghi nhận lượt nào. Hãy quét mã QR để thử.
+          </div>
+        ) : (
+          <div className="admin-visitor-table-wrap">
+            <table className="admin-visitor-table">
+              <thead>
+                <tr>
+                  <th>Mã khách</th>
+                  <th>Nguồn</th>
+                  <th>Ngôn ngữ</th>
+                  <th>Thời gian truy cập</th>
+                </tr>
+              </thead>
+              <tbody>
+                {visits.map((visit) => (
+                  <tr key={visit.id}>
+                    <td>
+                      <code>{visit.visitorId}</code>
+                    </td>
+                    <td>{visit.source === "qr" ? "Quét QR" : "Truy cập trực tiếp"}</td>
+                    <td>
+                      {languages.find(
+                        (language) => language.code === visit.language,
+                      )?.label || (visit.language ? visit.language : "Chưa chọn")}
+                    </td>
+                    <td>
+                      {visit.visitedAt
+                        ? new Date(visit.visitedAt).toLocaleString("vi-VN")
+                        : "—"}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </article>
+    </section>
+  );
+}
+
+function CashPaymentManager({ token }) {
+  const [payments, setPayments] = useState([]);
+  const [claimCodes, setClaimCodes] = useState({});
+  const [loading, setLoading] = useState(false);
+  const [confirmingCode, setConfirmingCode] = useState("");
+  const [error, setError] = useState("");
+  const [message, setMessage] = useState("");
+
+  const loadPayments = useCallback(async () => {
+    setLoading(true);
+    setError("");
+    try {
+      const response = await fetch("/api/payments/cash/pending", {
+        headers: {
+          Accept: "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      setPayments(await readResponse(response));
+    } catch (err) {
+      setError(err.message || "Không tải được giao dịch tiền mặt.");
+    } finally {
+      setLoading(false);
+    }
+  }, [token]);
+
+  useEffect(() => {
+    const timerId = setTimeout(() => {
+      void loadPayments();
+    }, 0);
+    return () => clearTimeout(timerId);
+  }, [loadPayments]);
+
+  async function confirmCashPayment(transactionCode) {
+    setConfirmingCode(transactionCode);
+    setError("");
+    setMessage("");
+    try {
+      const response = await fetch(
+        `/api/payments/${encodeURIComponent(transactionCode)}/confirm-cash`,
+        {
+          method: "POST",
+          headers: {
+            Accept: "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+        },
+      );
+      const data = await readResponse(response);
+      setPayments((current) =>
+        current.filter((payment) => payment.transactionCode !== transactionCode),
+      );
+      setClaimCodes((current) => ({
+        ...current,
+        [transactionCode]: data.claimCode,
+      }));
+      setMessage(`Đã xác nhận thu tiền cho giao dịch ${transactionCode}.`);
+    } catch (err) {
+      setError(err.message || "Không thể xác nhận giao dịch tiền mặt.");
+    } finally {
+      setConfirmingCode("");
+    }
+  }
+
+  return (
+    <section className="admin-poi-section" id="cash-payments">
+      <article className="admin-poi-panel">
+        <div className="admin-content-list-heading">
+          <div>
+            <h2>Thanh toán tiền mặt tại quầy</h2>
+            <p>
+              Xác nhận sau khi đã thu 50.000 đồng. Đưa mã xác nhận hiển thị cho
+              khách để họ mở quyền tham quan.
+            </p>
+          </div>
+          <button
+            className="admin-refresh"
+            type="button"
+            onClick={loadPayments}
+            disabled={loading}
+          >
+            ↻ {loading ? "Đang tải..." : "Làm mới"}
+          </button>
+        </div>
+
+        {message && (
+          <div className="admin-poi-message" role="status">
+            {message}
+          </div>
+        )}
+        {error && (
+          <div className="admin-poi-message error" role="alert">
+            {error}
+          </div>
+        )}
+        {Object.entries(claimCodes).map(([transactionCode, code]) => (
+          <div className="admin-poi-message" role="status" key={transactionCode}>
+            Mã xác nhận cho {transactionCode}: <strong>{code}</strong>
+          </div>
+        ))}
+
+        {loading ? (
+          <div className="admin-poi-empty">Đang tải giao dịch tiền mặt...</div>
+        ) : payments.length === 0 ? (
+          <div className="admin-poi-empty">
+            Không có giao dịch tiền mặt nào đang chờ xác nhận.
+          </div>
+        ) : (
+          <div className="admin-visitor-table-wrap">
+            <table className="admin-visitor-table">
+              <thead>
+                <tr>
+                  <th>Mã giao dịch</th>
+                  <th>Số tiền</th>
+                  <th>Ngôn ngữ</th>
+                  <th>Thời gian tạo</th>
+                  <th>Xác nhận</th>
+                </tr>
+              </thead>
+              <tbody>
+                {payments.map((payment) => (
+                  <tr key={payment.transactionCode}>
+                    <td><code>{payment.transactionCode}</code></td>
+                    <td>{formatNumber(payment.amount)} đ</td>
+                    <td>{payment.language || "vi"}</td>
+                    <td>
+                      {payment.createdAt
+                        ? new Date(payment.createdAt).toLocaleString("vi-VN")
+                        : "—"}
+                    </td>
+                    <td>
+                      <button
+                        type="button"
+                        className="admin-refresh"
+                        onClick={() => confirmCashPayment(payment.transactionCode)}
+                        disabled={Boolean(confirmingCode)}
+                      >
+                        {confirmingCode === payment.transactionCode
+                          ? "Đang xác nhận..."
+                          : "Đã thu tiền"}
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </article>
+    </section>
+  );
+}
+
 // ==================== TRANG QUẢN TRỊ CHÍNH ====================
 
 export default function AdminDashboard() {
@@ -596,8 +1382,16 @@ export default function AdminDashboard() {
             <span className="admin-nav-symbol">↗</span> Thống kê truy cập
           </a>
 
+          <a className="admin-nav-item" href="#cash-payments">
+            <span className="admin-nav-symbol">₫</span> Thanh toán tiền mặt
+          </a>
+
           <a className="admin-nav-item" href="#content">
             <span className="admin-nav-symbol">▤</span> Duyệt hồ sơ POI
+          </a>
+
+          <a className="admin-nav-item" href="#manage-content">
+            <span className="admin-nav-symbol">✎</span> Quản lý thuyết minh
           </a>
         </nav>
 
@@ -718,6 +1512,10 @@ export default function AdminDashboard() {
           />
         </section>
 
+        <VisitorQrCard />
+        <VisitorLog token={token} />
+        <CashPaymentManager token={token} />
+
         {/* Hai bảng tổng quan và trạng thái API */}
         <section className="admin-content-grid">
           <article className="admin-panel admin-overview-panel">
@@ -797,6 +1595,8 @@ export default function AdminDashboard() {
             </button>
           </article>
         </section>
+
+        <ContentManager token={token} />
 
         {/* Khu vực duyệt/từ chối hồ sơ POI; truyền JWT xuống component */}
         <PoiApplications token={token} />

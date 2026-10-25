@@ -3,6 +3,7 @@ package com.doan.content_service.repository;
 import com.doan.content_service.model.PaymentTransaction;
 import org.springframework.data.mongodb.repository.MongoRepository;
 
+import java.util.List;
 import java.util.Optional;
 
 public interface PaymentTransactionRepository
@@ -12,4 +13,7 @@ public interface PaymentTransactionRepository
     Optional<PaymentTransaction> findByTransactionCode(String transactionCode);
 
     Optional<PaymentTransaction> findByClaimCode(String claimCode);
+
+    List<PaymentTransaction> findByMethodAndStatusOrderByCreatedAtDesc(
+            String method, String status);
 }

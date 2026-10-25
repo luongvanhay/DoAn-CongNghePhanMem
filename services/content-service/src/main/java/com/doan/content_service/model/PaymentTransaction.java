@@ -24,6 +24,10 @@ public class PaymentTransaction {
 
     private String method;
 
+    private String language;
+
+    private String source;
+
     private String status;
 
     private boolean accessGranted = false;
@@ -50,6 +54,12 @@ public class PaymentTransaction {
 
     public String getMethod() { return method; }
     public void setMethod(String method) { this.method = method; }
+
+    public String getLanguage() { return language; }
+    public void setLanguage(String language) { this.language = language; }
+
+    public String getSource() { return source; }
+    public void setSource(String source) { this.source = source; }
 
     public String getStatus() { return status; }
     public void setStatus(String status) { this.status = status; }
