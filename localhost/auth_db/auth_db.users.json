@@ -1,0 +1,14 @@
+[{
+  "_id": {
+    "$oid": "6addbaad3692b3f81426792d"
+  },
+  "username": "admin",
+  "password": "$2a$10$k9AUyLZifiTpuQqlvSOEg.woJkLXXqMcMVflaFoVn6yIJdIiigqK6",
+  "role": "ADMIN",
+  "status": "ACTIVE",
+  "createdAt": {
+    "$date": "2026-10-25T08:15:41.500Z"
+  },
+  "poiOwnerVerified": false,
+  "_class": "com.doan.auth_service.model.User"
+}]
