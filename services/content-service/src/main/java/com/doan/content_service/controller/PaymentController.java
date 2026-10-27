@@ -57,11 +57,13 @@ public class PaymentController {
         String method = request.getMethod() == null
                 ? "" : request.getMethod().trim().toUpperCase(java.util.Locale.ROOT);
 
-        if (!method.equals("VNPAY") && !method.equals("CASH")) {
-            return ResponseEntity.badRequest()
-                    .body(message("Phương thức phải là VNPAY hoặc CASH"));
-        }
-
+        if (!method.equals("VNPAY")
+        && !method.equals("CASH")
+        && !method.equals("PAYOO")) {
+    return ResponseEntity.badRequest()
+            .body(message(
+                    "Phương thức phải là PAYOO, CASH hoặc VNPAY"));
+}
         if (method.equals("VNPAY") && !vnpayService.isConfigured()) {
             return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
                     .body(message(
@@ -352,6 +354,84 @@ public class PaymentController {
 
         return ResponseEntity.status(HttpStatus.CONFLICT)
                 .body(message("Giao dịch không ở trạng thái chờ thanh toán"));
+    }
+
+    // Thanh toán Payoo Demo (mô phỏng, không kết nối Payoo thật)
+    @PostMapping("/{transactionCode}/payoo-demo/complete")
+    public ResponseEntity<?> completePayooDemoPayment(
+            @PathVariable String transactionCode,
+            @RequestBody PayooDemoRequest request) {
+
+        Optional<PaymentTransaction> optional =
+                paymentRepository.findByTransactionCode(transactionCode);
+
+        if (optional.isEmpty()) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(message("Không tìm thấy giao dịch"));
+        }
+
+        PaymentTransaction transaction = optional.get();
+
+        // Chỉ được cập nhật giao dịch Payoo Demo.
+        if (!"PAYOO".equals(transaction.getMethod())) {
+            return ResponseEntity.badRequest()
+                    .body(message("Giao dịch này không phải Payoo Demo"));
+        }
+
+        // Giao dịch đã xử lý thì không được xử lý lại.
+        if (!"PENDING".equals(transaction.getStatus())) {
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(message("Giao dịch không còn ở trạng thái chờ thanh toán"));
+        }
+
+        if (request == null || request.getResult() == null) {
+            return ResponseEntity.badRequest()
+                    .body(message("Thiếu kết quả thanh toán"));
+        }
+
+        String result = request.getResult().trim()
+                .toUpperCase(java.util.Locale.ROOT);
+
+        if ("SUCCESS".equals(result)) {
+            transaction.setStatus("PAID");
+            transaction.setPaidAt(LocalDateTime.now());
+            transaction.setAccessGranted(true);
+        } else if ("CANCEL".equals(result)) {
+            transaction.setStatus("FAILED");
+            transaction.setAccessGranted(false);
+        } else {
+            return ResponseEntity.badRequest()
+                    .body(message("Kết quả phải là SUCCESS hoặc CANCEL"));
+        }
+
+        PaymentTransaction saved = paymentRepository.save(transaction);
+
+        Map<String, Object> response = new HashMap<>();
+        response.put("transactionCode", saved.getTransactionCode());
+        response.put("method", saved.getMethod());
+        response.put("status", saved.getStatus());
+        response.put("accessGranted", saved.isAccessGranted());
+        response.put(
+                "message",
+                "SUCCESS".equals(result)
+                        ? "Thanh toán Payoo Demo thành công"
+                        : "Đã hủy giao dịch Payoo Demo"
+        );
+
+        return ResponseEntity.ok(response);
+    }
+
+    // Request nhận kết quả từ giao diện Payoo Demo.
+    public static class PayooDemoRequest {
+        private String result;
+
+        public String getResult() {
+            return result;
+        }
+
+        public void setResult(String result) {
+            this.result = result;
+        }
     }
 
     private String generateClaimCode() {

@@ -1,7 +1,10 @@
 import { useCallback, useEffect, useState } from "react";
+import { NavLink, useLocation } from "react-router-dom";
 import { QRCodeSVG } from "qrcode.react";
 import { languages } from "../../i18n";
 import "./AdminDashboard.css";
+import CashPaymentManager from "./CashPaymentManager.jsx";
+import { formatNumber, readResponse } from "./adminUtils.js";
 
 // ==================== CẤU HÌNH API ====================
 
@@ -25,32 +28,6 @@ const initialStats = {
   visitsToday: 0,
   uniqueVisitorsToday: 0,
 };
-
-// ==================== HÀM HỖ TRỢ ====================
-
-// Chuyển giá trị số thành chuỗi có định dạng Việt Nam
-// Ví dụ: 10000 -> 10.000
-function formatNumber(value) {
-  const number = Number(value);
-
-  return Number.isFinite(number)
-    ? new Intl.NumberFormat("vi-VN").format(number)
-    : "—";
-}
-
-// Đọc dữ liệu JSON từ phản hồi API.
-// Nếu HTTP không thành công, lấy message từ backend để hiển thị lỗi.
-async function readResponse(response) {
-  const data = await response.json().catch(() => ({}));
-
-  if (!response.ok) {
-    throw new Error(
-      data.message || `Yêu cầu thất bại (HTTP ${response.status}).`,
-    );
-  }
-
-  return data;
-}
 
 // ==================== THẺ THỐNG KÊ ====================
 
@@ -729,22 +706,23 @@ function ContentManager({ token }) {
           <details className="admin-content-translations wide">
             <summary>
               Bản dịch thuyết minh (
-              {form.translations.filter((translation) =>
-                translation.description?.trim(),
-              ).length}
+              {
+                form.translations.filter((translation) =>
+                  translation.description?.trim(),
+                ).length
+              }
               )
             </summary>
             <p>
-              Nhập lời thuyết minh đã dịch cho từng ngôn ngữ. Bản dịch được
-              lưu trong MongoDB và sẽ được dùng để hiển thị, phát âm thanh.
-              Ngôn ngữ chưa có bản dịch sẽ cần dịch vụ dịch tự động.
+              Nhập lời thuyết minh đã dịch cho từng ngôn ngữ. Bản dịch được lưu
+              trong MongoDB và sẽ được dùng để hiển thị, phát âm thanh. Ngôn ngữ
+              chưa có bản dịch sẽ cần dịch vụ dịch tự động.
             </p>
             <div className="admin-content-translation-list">
               {languages
                 .filter(
                   (language) =>
-                    language.code !==
-                    form.sourceLanguage.trim().toLowerCase(),
+                    language.code !== form.sourceLanguage.trim().toLowerCase(),
                 )
                 .map((language) => {
                   const translation = form.translations.find(
@@ -982,10 +960,15 @@ function VisitorQrCard() {
             />
           </label>
           <p className="admin-qr-warning">
-            Không dùng localhost khi in QR cho khách; hãy nhập tên miền đã
-            triển khai hoặc địa chỉ mạng mà điện thoại khách truy cập được.
+            Không dùng localhost khi in QR cho khách; hãy nhập tên miền đã triển
+            khai hoặc địa chỉ mạng mà điện thoại khách truy cập được.
           </p>
-          <a className="admin-qr-url" href={visitorUrl || undefined} target="_blank" rel="noreferrer">
+          <a
+            className="admin-qr-url"
+            href={visitorUrl || undefined}
+            target="_blank"
+            rel="noreferrer"
+          >
             {visitorUrl}
           </a>
           <button
@@ -1097,11 +1080,14 @@ function VisitorLog({ token }) {
                     <td>
                       <code>{visit.visitorId}</code>
                     </td>
-                    <td>{visit.source === "qr" ? "Quét QR" : "Truy cập trực tiếp"}</td>
+                    <td>
+                      {visit.source === "qr" ? "Quét QR" : "Truy cập trực tiếp"}
+                    </td>
                     <td>
                       {languages.find(
                         (language) => language.code === visit.language,
-                      )?.label || (visit.language ? visit.language : "Chưa chọn")}
+                      )?.label ||
+                        (visit.language ? visit.language : "Chưa chọn")}
                     </td>
                     <td>
                       {visit.visitedAt
@@ -1119,162 +1105,17 @@ function VisitorLog({ token }) {
   );
 }
 
-function CashPaymentManager({ token }) {
-  const [payments, setPayments] = useState([]);
-  const [claimCodes, setClaimCodes] = useState({});
-  const [loading, setLoading] = useState(false);
-  const [confirmingCode, setConfirmingCode] = useState("");
-  const [error, setError] = useState("");
-  const [message, setMessage] = useState("");
-
-  const loadPayments = useCallback(async () => {
-    setLoading(true);
-    setError("");
-    try {
-      const response = await fetch("/api/payments/cash/pending", {
-        headers: {
-          Accept: "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-      });
-      setPayments(await readResponse(response));
-    } catch (err) {
-      setError(err.message || "Không tải được giao dịch tiền mặt.");
-    } finally {
-      setLoading(false);
-    }
-  }, [token]);
-
-  useEffect(() => {
-    const timerId = setTimeout(() => {
-      void loadPayments();
-    }, 0);
-    return () => clearTimeout(timerId);
-  }, [loadPayments]);
-
-  async function confirmCashPayment(transactionCode) {
-    setConfirmingCode(transactionCode);
-    setError("");
-    setMessage("");
-    try {
-      const response = await fetch(
-        `/api/payments/${encodeURIComponent(transactionCode)}/confirm-cash`,
-        {
-          method: "POST",
-          headers: {
-            Accept: "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-        },
-      );
-      const data = await readResponse(response);
-      setPayments((current) =>
-        current.filter((payment) => payment.transactionCode !== transactionCode),
-      );
-      setClaimCodes((current) => ({
-        ...current,
-        [transactionCode]: data.claimCode,
-      }));
-      setMessage(`Đã xác nhận thu tiền cho giao dịch ${transactionCode}.`);
-    } catch (err) {
-      setError(err.message || "Không thể xác nhận giao dịch tiền mặt.");
-    } finally {
-      setConfirmingCode("");
-    }
-  }
-
-  return (
-    <section className="admin-poi-section" id="cash-payments">
-      <article className="admin-poi-panel">
-        <div className="admin-content-list-heading">
-          <div>
-            <h2>Thanh toán tiền mặt tại quầy</h2>
-            <p>
-              Xác nhận sau khi đã thu 50.000 đồng. Đưa mã xác nhận hiển thị cho
-              khách để họ mở quyền tham quan.
-            </p>
-          </div>
-          <button
-            className="admin-refresh"
-            type="button"
-            onClick={loadPayments}
-            disabled={loading}
-          >
-            ↻ {loading ? "Đang tải..." : "Làm mới"}
-          </button>
-        </div>
-
-        {message && (
-          <div className="admin-poi-message" role="status">
-            {message}
-          </div>
-        )}
-        {error && (
-          <div className="admin-poi-message error" role="alert">
-            {error}
-          </div>
-        )}
-        {Object.entries(claimCodes).map(([transactionCode, code]) => (
-          <div className="admin-poi-message" role="status" key={transactionCode}>
-            Mã xác nhận cho {transactionCode}: <strong>{code}</strong>
-          </div>
-        ))}
-
-        {loading ? (
-          <div className="admin-poi-empty">Đang tải giao dịch tiền mặt...</div>
-        ) : payments.length === 0 ? (
-          <div className="admin-poi-empty">
-            Không có giao dịch tiền mặt nào đang chờ xác nhận.
-          </div>
-        ) : (
-          <div className="admin-visitor-table-wrap">
-            <table className="admin-visitor-table">
-              <thead>
-                <tr>
-                  <th>Mã giao dịch</th>
-                  <th>Số tiền</th>
-                  <th>Ngôn ngữ</th>
-                  <th>Thời gian tạo</th>
-                  <th>Xác nhận</th>
-                </tr>
-              </thead>
-              <tbody>
-                {payments.map((payment) => (
-                  <tr key={payment.transactionCode}>
-                    <td><code>{payment.transactionCode}</code></td>
-                    <td>{formatNumber(payment.amount)} đ</td>
-                    <td>{payment.language || "vi"}</td>
-                    <td>
-                      {payment.createdAt
-                        ? new Date(payment.createdAt).toLocaleString("vi-VN")
-                        : "—"}
-                    </td>
-                    <td>
-                      <button
-                        type="button"
-                        className="admin-refresh"
-                        onClick={() => confirmCashPayment(payment.transactionCode)}
-                        disabled={Boolean(confirmingCode)}
-                      >
-                        {confirmingCode === payment.transactionCode
-                          ? "Đang xác nhận..."
-                          : "Đã thu tiền"}
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </article>
-    </section>
-  );
-}
-
 // ==================== TRANG QUẢN TRỊ CHÍNH ====================
 
 export default function AdminDashboard() {
+  const location = useLocation();
+
+  const currentPath = location.pathname.replace(/\/+$/, "") || "/admin";
+
+  const currentPage =
+    currentPath === "/admin" || currentPath === "/admin/"
+      ? "dashboard"
+      : currentPath.replace("/admin/", "");
   // token được giữ trong state React, không lưu vào localStorage
   const [token, setToken] = useState("");
 
@@ -1370,29 +1211,56 @@ export default function AdminDashboard() {
 
         {/* Các liên kết chuyển đến từng khu vực trên trang */}
         <nav className="admin-nav" aria-label="Điều hướng quản trị">
-          <a
-            className="admin-nav-item active"
-            href="#dashboard"
-            aria-current="page"
+          <NavLink
+            to="/admin"
+            end
+            className={({ isActive }) =>
+              `admin-nav-item${isActive ? " active" : ""}`
+            }
           >
-            <span className="admin-nav-symbol">▦</span> Bảng điều khiển
-          </a>
+            <span className="admin-nav-symbol">▦</span>
+            Bảng điều khiển
+          </NavLink>
 
-          <a className="admin-nav-item" href="#visits">
-            <span className="admin-nav-symbol">↗</span> Thống kê truy cập
-          </a>
+          <NavLink
+            to="/admin/visits"
+            className={({ isActive }) =>
+              `admin-nav-item${isActive ? " active" : ""}`
+            }
+          >
+            <span className="admin-nav-symbol">↗</span>
+            Thống kê truy cập
+          </NavLink>
 
-          <a className="admin-nav-item" href="#cash-payments">
-            <span className="admin-nav-symbol">₫</span> Thanh toán tiền mặt
-          </a>
+          <NavLink
+            to="/admin/payments"
+            className={({ isActive }) =>
+              `admin-nav-item${isActive ? " active" : ""}`
+            }
+          >
+            <span className="admin-nav-symbol">₫</span>
+            Thanh toán tiền mặt
+          </NavLink>
 
-          <a className="admin-nav-item" href="#content">
-            <span className="admin-nav-symbol">▤</span> Duyệt hồ sơ POI
-          </a>
+          <NavLink
+            to="/admin/poi-owners"
+            className={({ isActive }) =>
+              `admin-nav-item${isActive ? " active" : ""}`
+            }
+          >
+            <span className="admin-nav-symbol">♧</span>
+            Duyệt hồ sơ POI
+          </NavLink>
 
-          <a className="admin-nav-item" href="#manage-content">
-            <span className="admin-nav-symbol">✎</span> Quản lý thuyết minh
-          </a>
+          <NavLink
+            to="/admin/contents"
+            className={({ isActive }) =>
+              `admin-nav-item${isActive ? " active" : ""}`
+            }
+          >
+            <span className="admin-nav-symbol">✎</span>
+            Quản lý thuyết minh
+          </NavLink>
         </nav>
 
         {/* Thông tin tài khoản đang đăng nhập */}
@@ -1436,32 +1304,33 @@ export default function AdminDashboard() {
         </header>
 
         {/* Tiêu đề trang và nút tải lại thống kê */}
-        <section className="admin-page-heading">
-          <div>
-            <p className="admin-eyebrow">TỔNG QUAN WEBSITE</p>
-            <h1>Bảng điều khiển</h1>
-            <p className="admin-subtitle">
-              Theo dõi hoạt động và lượt truy cập website của bạn.
-            </p>
-          </div>
+        {currentPage === "dashboard" && (
+          <section className="admin-page-heading">
+            <div>
+              <p className="admin-eyebrow">TỔNG QUAN WEBSITE</p>
+              <h1>Bảng điều khiển</h1>
+              <p className="admin-subtitle">
+                Theo dõi hoạt động và lượt truy cập website của bạn.
+              </p>
+            </div>
 
-          <button
-            className="admin-refresh"
-            type="button"
-            onClick={loadStats}
-            disabled={loading}
-          >
-            <span
-              className={
-                loading ? "admin-refresh-icon spinning" : "admin-refresh-icon"
-              }
+            <button
+              className="admin-refresh"
+              type="button"
+              onClick={loadStats}
+              disabled={loading}
             >
-              ↻
-            </span>
-            {loading ? "Đang tải..." : "Làm mới dữ liệu"}
-          </button>
-        </section>
-
+              <span
+                className={
+                  loading ? "admin-refresh-icon spinning" : "admin-refresh-icon"
+                }
+              >
+                ↻
+              </span>
+              {loading ? "Đang tải..." : "Làm mới dữ liệu"}
+            </button>
+          </section>
+        )}
         {/* Hiển thị lỗi nếu API thống kê không phản hồi thành công */}
         {error && (
           <div className="admin-alert" role="alert">
@@ -1474,47 +1343,52 @@ export default function AdminDashboard() {
         )}
 
         {/* Bốn thẻ thống kê lượt truy cập */}
-        <section
-          className="admin-stats-grid"
-          id="visits"
-          aria-label="Số liệu truy cập"
-        >
-          <StatCard
-            icon="↗"
-            tone="purple"
-            label="Tổng lượt truy cập"
-            value={stats.totalVisits}
-            hint="Tất cả lượt đã ghi nhận"
-          />
+        {currentPage === "dashboard" && (
+          <section
+            className="admin-stats-grid"
+            id="visits"
+            aria-label="Số liệu truy cập"
+          >
+            <StatCard
+              icon="↗"
+              tone="purple"
+              label="Tổng lượt truy cập"
+              value={stats.totalVisits}
+              hint="Tất cả lượt đã ghi nhận"
+            />
 
-          <StatCard
-            icon="◎"
-            tone="blue"
-            label="Khách truy cập duy nhất"
-            value={stats.uniqueVisitors}
-            hint="Tính theo mã khách truy cập"
-          />
+            <StatCard
+              icon="◎"
+              tone="blue"
+              label="Khách truy cập duy nhất"
+              value={stats.uniqueVisitors}
+              hint="Tính theo mã khách truy cập"
+            />
 
-          <StatCard
-            icon="◷"
-            tone="orange"
-            label="Lượt truy cập hôm nay"
-            value={stats.visitsToday}
-            hint="Trong ngày hiện tại"
-          />
+            <StatCard
+              icon="◷"
+              tone="orange"
+              label="Lượt truy cập hôm nay"
+              value={stats.visitsToday}
+              hint="Trong ngày hiện tại"
+            />
 
-          <StatCard
-            icon="♙"
-            tone="green"
-            label="Khách hôm nay"
-            value={stats.uniqueVisitorsToday}
-            hint="Khách riêng biệt hôm nay"
-          />
-        </section>
+            <StatCard
+              icon="♙"
+              tone="green"
+              label="Khách hôm nay"
+              value={stats.uniqueVisitorsToday}
+              hint="Khách riêng biệt hôm nay"
+            />
+          </section>
+        )}
+        {(currentPage === "dashboard" || currentPage === "visits") && (
+          <VisitorLog token={token} />
+        )}
 
-        <VisitorQrCard />
-        <VisitorLog token={token} />
-        <CashPaymentManager token={token} />
+        {currentPage === "dashboard" && <VisitorQrCard />}
+
+        {currentPage === "payments" && <CashPaymentManager token={token} />}
 
         {/* Hai bảng tổng quan và trạng thái API */}
         <section className="admin-content-grid">
@@ -1596,11 +1470,13 @@ export default function AdminDashboard() {
           </article>
         </section>
 
-        <ContentManager token={token} />
-
+        {(currentPage === "dashboard" || currentPage === "contents") && (
+          <ContentManager token={token} />
+        )}
         {/* Khu vực duyệt/từ chối hồ sơ POI; truyền JWT xuống component */}
-        <PoiApplications token={token} />
-
+        {(currentPage === "dashboard" || currentPage === "poi-owners") && (
+          <PoiApplications token={token} />
+        )}
         {/* Chân trang quản trị */}
         <footer className="admin-footer">
           <span>© {new Date().getFullYear()} DoAn CMS</span>

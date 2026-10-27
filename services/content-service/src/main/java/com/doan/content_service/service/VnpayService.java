@@ -58,7 +58,6 @@ public class VnpayService {
         parameters.put("vnp_OrderInfo", "Thanh toan ve tham quan " + transactionCode);
         parameters.put("vnp_OrderType", "other");
         parameters.put("vnp_Locale", "vn");
-        parameters.put("vnp_BankCode", "VNPAYQR");
         parameters.put("vnp_ReturnUrl", returnUrl);
         parameters.put("vnp_IpAddr", normalizeIpAddress(clientIpAddress));
         parameters.put("vnp_CreateDate", VNPAY_DATE.format(now));
