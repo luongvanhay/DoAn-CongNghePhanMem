@@ -68,6 +68,8 @@ services:
       - "27018:27017"
     volumes:
       - mongo_data:/data/db
+      - ./database/init:/docker-entrypoint-initdb.d:ro
+      - ./database/seed:/seed:ro
 
 volumes:
   mongo_data:
