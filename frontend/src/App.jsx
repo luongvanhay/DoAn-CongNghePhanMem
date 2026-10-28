@@ -81,7 +81,9 @@ async function translateText(text, source, target) {
   const data = await response.json().catch(() => ({}));
 
   if (!response.ok || !data.translated_text) {
-    throw new Error(data.message || `Dịch nội dung thất bại (HTTP ${response.status}).`);
+    throw new Error(
+      data.message || `Dịch nội dung thất bại (HTTP ${response.status}).`,
+    );
   }
 
   translationCache.set(cacheKey, data.translated_text);
@@ -94,16 +96,24 @@ async function translatePlace(place, language) {
   );
   const source = place.sourceLanguage || "vi";
 
-  if (savedTranslation?.description?.trim()) {
-    const localized = localizePlace(place, language);
-    return localized;
+  if (savedTranslation) {
+    const savedTitle = savedTranslation.title?.trim();
+    const [name, category, description] = await Promise.all([
+      savedTitle && savedTitle !== place.name.trim()
+        ? savedTitle
+        : translateText(place.name, source, language),
+      translateText(place.category, source, language),
+      savedTranslation.description?.trim()
+        ? savedTranslation.description
+        : translateText(place.description, source, language),
+    ]);
+
+    return { ...place, name, category, description };
   }
 
   const separator = `[[FIELD_${Math.random().toString(36).slice(2)}]]`;
   const translatedFields = await translateText(
-    [place.name, place.category, place.description].join(
-      `\n${separator}\n`,
-    ),
+    [place.name, place.category, place.description].join(`\n${separator}\n`),
     source,
     language,
   );
@@ -184,8 +194,8 @@ function LanguageSelection({ onSelect }) {
           Hệ thống thuyết minh tự động · Bán đảo Sơn Trà, Đà Nẵng
         </p>
         <p className="language-selection-privacy">
-          Website chỉ lưu mã khách ngẫu nhiên, thời điểm truy cập và ngôn ngữ
-          đã chọn để thống kê; không lưu tên, email hay mật khẩu.
+          Website chỉ lưu mã khách ngẫu nhiên, thời điểm truy cập và ngôn ngữ đã
+          chọn để thống kê; không lưu tên, email hay mật khẩu.
         </p>
       </section>
     </main>
@@ -242,6 +252,8 @@ function MapApp({ language, onChangeLanguage, onOpenLanguageSelection }) {
       setLoading(true);
       setApiError("");
       setTranslationError("");
+      setLocalizedPlaces([]);
+      setSelected(null);
 
       try {
         const data = await getContents();
@@ -285,9 +297,7 @@ function MapApp({ language, onChangeLanguage, onOpenLanguageSelection }) {
               return await translatePlace(place, language);
             } catch (error) {
               if (!cancelled) {
-                setTranslationError(
-                  error?.message || text.translationError,
-                );
+                setTranslationError(error?.message || text.translationError);
               }
               return {
                 ...localizePlace(place, language),
@@ -443,7 +453,8 @@ function MapApp({ language, onChangeLanguage, onOpenLanguageSelection }) {
           },
           body: JSON.stringify({
             text: selected.description,
-            lang: languages.find((item) => item.code === language)?.tts || language,
+            lang:
+              languages.find((item) => item.code === language)?.tts || language,
           }),
           signal: controller.signal,
         });
@@ -569,13 +580,9 @@ function MapApp({ language, onChangeLanguage, onOpenLanguageSelection }) {
               <Compass size={15} /> {text.heroKicker}
             </span>
 
-            <h1>
-              {text.heroTitle}
-            </h1>
+            <h1>{text.heroTitle}</h1>
 
-            <p>
-              {text.heroDescription}
-            </p>
+            <p>{text.heroDescription}</p>
 
             <button
               className="primary-button"
@@ -628,7 +635,9 @@ function MapApp({ language, onChangeLanguage, onOpenLanguageSelection }) {
 
           {apiError && (
             <div className="status-message" role="alert">
-              <p>{text.loadError}: {apiError}</p>
+              <p>
+                {text.loadError}: {apiError}
+              </p>
               <button className="outline-button" onClick={retryLoadPlaces}>
                 {text.retry}
               </button>
@@ -700,9 +709,7 @@ function MapApp({ language, onChangeLanguage, onOpenLanguageSelection }) {
 
                 {filteredPlaces.length === 0 && (
                   <p className="empty-state">
-                    {places.length === 0
-                      ? text.noPlace
-                      : text.noMatch}
+                    {places.length === 0 ? text.noPlace : text.noMatch}
                   </p>
                 )}
               </div>
@@ -724,7 +731,7 @@ function MapApp({ language, onChangeLanguage, onOpenLanguageSelection }) {
                   aria-label={
                     playing || audioLoading
                       ? text.stopNarration
-                        : text.playNarration
+                      : text.playNarration
                   }
                 >
                   <Volume2 size={19} />
@@ -831,10 +838,7 @@ function MapApp({ language, onChangeLanguage, onOpenLanguageSelection }) {
               {selected?.category || text.category}
             </span>
 
-            <p>
-              {selected?.description ||
-                text.fallback}
-            </p>
+            <p>{selected?.description || text.fallback}</p>
 
             <div className="detail-actions">
               <button
@@ -860,9 +864,7 @@ function MapApp({ language, onChangeLanguage, onOpenLanguageSelection }) {
             </div>
 
             <p className="demo-note">
-              {selected
-                ? text.fromBackend
-                : text.noPlaces}
+              {selected ? text.fromBackend : text.noPlaces}
             </p>
           </div>
         </section>
@@ -904,8 +906,7 @@ function MapApp({ language, onChangeLanguage, onOpenLanguageSelection }) {
 
           <div className="chat-body">
             <p className="chat-bubble">
-              {text.chatGreeting}{" "}
-              {selected?.name || text.category}?
+              {text.chatGreeting} {selected?.name || text.category}?
             </p>
 
             {answer && <p className="chat-bubble">{answer}</p>}
@@ -1014,9 +1015,7 @@ function RedirectToHome() {
 }
 
 function App() {
-  if (
-    window.location.pathname === "/payments"
-  ) {
+  if (window.location.pathname === "/payments") {
     return <RedirectToHome />;
   }
 

@@ -8,10 +8,124 @@ import {
   QrCode,
   ShieldCheck,
 } from "lucide-react";
-import { languages, supportedLanguageCodes } from "../../i18n";
+import { supportedLanguageCodes } from "../../i18n";
 import "./PaymentPage.css";
 
 const TICKET_PRICE = 50000;
+
+const PAYMENT_COPY = {
+  siteLabel: "HỆ THỐNG THAM QUAN",
+  secure: "Thanh toán an toàn",
+  welcome: "CHÀO MỪNG QUÝ KHÁCH",
+  pageTitle: "Đăng ký quyền tham quan",
+  introduction:
+    "Vui lòng chọn phương thức thanh toán để sử dụng bản đồ tham quan và khám phá các địa điểm tại Chùa Linh Ứng.",
+  ticketPrice: "Giá vé: 50.000 đồng/lượt",
+  paymentSuccess: "Thanh toán thành công",
+  visitSite: "Vào trang tham quan",
+  chooseMethod: "Chọn phương thức thanh toán",
+  chooseMethodHint: "Chọn một trong hai hình thức bên dưới.",
+  onlineDescription: "Thanh toán trực tuyến qua cổng VNPAY",
+  cashMethod: "Thanh toán tiền mặt",
+  cashDescription: "Nhận mã xác nhận từ nhân viên",
+  onlineAmount: "Thanh toán an toàn qua VNPAY Sandbox. Số tiền: 50.000 đồng",
+  connectingVnpay: "Đang chuyển đến VNPAY...",
+  payByVnpay: "Thanh toán bằng VNPAY",
+  createCashHint:
+    "Tạo giao dịch trước, sau đó đưa mã giao dịch cho nhân viên tại điểm tham quan.",
+  creatingTransaction: "Đang tạo giao dịch...",
+  createCash: "Tạo giao dịch tiền mặt",
+  yourTransactionCode: "Mã giao dịch của bạn:",
+  amountDue: "Số tiền cần thanh toán: 50.000 đồng",
+  claimInstructions:
+    "Sau khi nhân viên xác nhận đã thu tiền, hãy nhập Claim code mà nhân viên cung cấp.",
+  claimCodeLabel: "Mã xác nhận (Claim code)",
+  claimCodePlaceholder: "Nhập mã do nhân viên cung cấp",
+  verifying: "Đang xác thực...",
+  verifyCode: "Xác thực mã",
+  anotherTransaction: "Tạo giao dịch khác",
+  selectMethodHint: "Vui lòng chọn phương thức thanh toán ở trên.",
+  paymentNote:
+    "Payoo Demo chỉ mô phỏng kết quả thanh toán, không kết nối Payoo thật. Thanh toán tiền mặt chỉ được cấp quyền sau khi nhân viên xác nhận và Claim code hợp lệ.",
+  backToMap: "Quay lại bản đồ",
+  loadingTranslation: "Đang dịch trang thanh toán...",
+  translationUnavailable:
+    "Không thể dịch trang thanh toán lúc này. Nội dung đang hiển thị bằng tiếng Việt.",
+  paymentError: "Không thể tạo giao dịch VNPAY.",
+  transactionDataError: "Máy chủ chưa trả về mã giao dịch hoặc URL VNPAY.",
+  cashError: "Không thể tạo giao dịch tiền mặt.",
+  transactionCodeError: "Máy chủ chưa trả về mã giao dịch.",
+  cashPending:
+    "Đưa mã giao dịch cho nhân viên và thanh toán 50.000 đồng. Sau khi nhân viên xác nhận, hãy nhập mã xác nhận được cung cấp.",
+  payooUpdateError: "Không thể cập nhật giao dịch Payoo Demo.",
+  payooSuccess: "Thanh toán Payoo Demo thành công.",
+  payooCancelled: "Giao dịch Payoo Demo đã bị hủy.",
+  transactionPending: "Giao dịch chưa hoàn tất.",
+  payooError: "Có lỗi khi xử lý Payoo Demo.",
+  claimError: "Không thể xác thực mã xác nhận.",
+  claimSuccess:
+    "Xác thực thành công. Bạn có thể vào trang tham quan.",
+  transactionCheckError: "Không thể kiểm tra giao dịch.",
+  paidAndReady: "Thanh toán thành công. Bạn có thể vào trang tham quan.",
+  transactionCancelled: "Giao dịch chưa hoàn tất hoặc đã bị hủy.",
+  vnpayPending:
+    "Giao dịch đang được xác nhận. Vui lòng chờ trong giây lát.",
+  payooPending: "Giao dịch Payoo Demo đang chờ xử lý.",
+  cashWaiting: "Đang chờ nhân viên xác nhận giao dịch tiền mặt.",
+};
+
+const paymentTranslationCache = new Map();
+
+async function translatePaymentText(text, target) {
+  if (!text || target === "vi") {
+    return text;
+  }
+
+  const cacheKey = `${target}:${text}`;
+  if (paymentTranslationCache.has(cacheKey)) {
+    return paymentTranslationCache.get(cacheKey);
+  }
+
+  const response = await fetch("/api/translation/translate", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ text, source: "vi", target }),
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok || !data.translated_text) {
+    throw new Error(
+      data.message || `Dịch nội dung thất bại (HTTP ${response.status}).`,
+    );
+  }
+
+  paymentTranslationCache.set(cacheKey, data.translated_text);
+  return data.translated_text;
+}
+
+async function translatePaymentCopy(target) {
+  const entries = Object.entries(PAYMENT_COPY);
+  const markers = entries.map((_, index) => `[[PAYMENT_${index}]]`);
+  const text = entries
+    .map(([key], index) => `${markers[index]} ${PAYMENT_COPY[key]}`)
+    .join("\n");
+  const translated = await translatePaymentText(text, target);
+  const parts = markers.map((marker) => {
+    const markerIndex = translated.indexOf(marker);
+    if (markerIndex < 0) {
+      throw new Error("Bản dịch trang thanh toán không đầy đủ.");
+    }
+    return markerIndex;
+  });
+
+  return Object.fromEntries(
+    entries.map(([key], index) => {
+      const start = parts[index] + markers[index].length;
+      const end =
+        index + 1 < parts.length ? parts[index + 1] : translated.length;
+      return [key, translated.slice(start, end).trim()];
+    }),
+  );
+}
 
 function getCheckoutLanguage() {
   const requestedLanguage = new URLSearchParams(window.location.search).get(
@@ -25,7 +139,6 @@ function getCheckoutLanguage() {
 
 export default function PaymentPage() {
   const language = getCheckoutLanguage();
-  const selectedLanguage = languages.find((item) => item.code === language);
 
   const [transactionCode, setTransactionCode] = useState("");
   const [method, setMethod] = useState("");
@@ -33,6 +146,76 @@ export default function PaymentPage() {
   const [status, setStatus] = useState("ready");
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
+  const [translatedCopy, setTranslatedCopy] = useState(null);
+  const [translationStatus, setTranslationStatus] = useState(
+    language === "vi" ? "ready" : "loading",
+  );
+  const [copyError, setCopyError] = useState("");
+  const [translatedMessage, setTranslatedMessage] = useState(null);
+  const copy =
+    language === "vi"
+      ? PAYMENT_COPY
+      : translatedCopy?.language === language
+        ? { ...PAYMENT_COPY, ...translatedCopy.values }
+        : PAYMENT_COPY;
+  const copyLoading =
+    language !== "vi" &&
+    translationStatus === "loading" &&
+    translatedCopy?.language !== language;
+  const displayMessage =
+    language === "vi" || !message
+      ? message
+      : translatedMessage?.language === language &&
+          translatedMessage.source === message
+        ? translatedMessage.text
+        : message;
+
+  useEffect(() => {
+    let cancelled = false;
+
+    if (language === "vi") return undefined;
+
+    void translatePaymentCopy(language)
+      .then((values) => {
+        if (!cancelled) {
+          setTranslatedCopy({ language, values });
+          setCopyError("");
+          setTranslationStatus("ready");
+        }
+      })
+      .catch((error) => {
+        if (!cancelled) {
+          setCopyError(error.message || PAYMENT_COPY.translationUnavailable);
+          setTranslationStatus("error");
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    }
+  }, [language]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    if (!message || language === "vi") return undefined;
+
+    void translatePaymentText(message, language)
+      .then((text) => {
+        if (!cancelled) {
+          setTranslatedMessage({ language, source: message, text });
+        }
+      })
+      .catch((error) => {
+        if (!cancelled) {
+          setCopyError(error.message || PAYMENT_COPY.translationUnavailable);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [language, message]);
 
   function getPaymentSource() {
     return new URLSearchParams(window.location.search).get("source");
@@ -58,11 +241,11 @@ export default function PaymentPage() {
       const data = await response.json().catch(() => ({}));
 
       if (!response.ok) {
-        throw new Error(data.message || "Không thể tạo giao dịch VNPAY.");
+        throw new Error(data.message || copy.paymentError);
       }
 
       if (!data.transactionCode || !data.paymentUrl) {
-        throw new Error("Máy chủ chưa trả về mã giao dịch hoặc URL VNPAY.");
+        throw new Error(copy.transactionDataError);
       }
 
       setTransactionCode(data.transactionCode);
@@ -72,7 +255,7 @@ export default function PaymentPage() {
       window.location.assign(data.paymentUrl);
     } catch (error) {
       setStatus("error");
-      setMessage(error.message || "Không thể tạo giao dịch VNPAY.");
+      setMessage(error.message || copy.paymentError);
       setLoading(false);
     }
   }
@@ -97,22 +280,22 @@ export default function PaymentPage() {
       const data = await response.json().catch(() => ({}));
 
       if (!response.ok) {
-        throw new Error(data.message || "Không thể tạo giao dịch tiền mặt.");
+        throw new Error(data.message || copy.cashError);
       }
 
       if (!data.transactionCode) {
-        throw new Error("Máy chủ chưa trả về mã giao dịch.");
+        throw new Error(copy.transactionCodeError);
       }
 
       setTransactionCode(data.transactionCode);
       setMethod("cash");
       setStatus("pending");
       setMessage(
-        "Đưa mã giao dịch cho nhân viên và thanh toán 50.000 đồng. Sau khi nhân viên xác nhận, hãy nhập mã xác nhận được cung cấp.",
+        copy.cashPending,
       );
     } catch (error) {
       setStatus("error");
-      setMessage(error.message || "Không thể tạo giao dịch tiền mặt.");
+      setMessage(error.message || copy.cashError);
     } finally {
       setLoading(false);
     }
@@ -140,22 +323,22 @@ export default function PaymentPage() {
 
       if (!response.ok) {
         throw new Error(
-          data.message || "Không thể cập nhật giao dịch Payoo Demo.",
+          data.message || copy.payooUpdateError,
         );
       }
 
       if (data.status === "PAID" && data.accessGranted) {
         setStatus("success");
-        setMessage(data.message || "Thanh toán Payoo Demo thành công.");
+        setMessage(data.message || copy.payooSuccess);
       } else if (data.status === "FAILED") {
         setStatus("error");
-        setMessage(data.message || "Giao dịch Payoo Demo đã bị hủy.");
+        setMessage(data.message || copy.payooCancelled);
       } else {
         setStatus("pending");
-        setMessage(data.message || "Giao dịch chưa hoàn tất.");
+        setMessage(data.message || copy.transactionPending);
       }
     } catch (error) {
-      setMessage(error.message || "Có lỗi khi xử lý Payoo Demo.");
+      setMessage(error.message || copy.payooError);
     } finally {
       setLoading(false);
     }
@@ -179,16 +362,16 @@ export default function PaymentPage() {
       const data = await response.json().catch(() => ({}));
 
       if (!response.ok) {
-        throw new Error(data.message || "Không thể xác thực mã xác nhận.");
+        throw new Error(data.message || copy.claimError);
       }
 
       setStatus("success");
       setMessage(
-        data.message || "Xác thực thành công. Bạn có thể vào trang tham quan.",
+        data.message || copy.claimSuccess,
       );
     } catch (error) {
       setStatus("error");
-      setMessage(error.message || "Không thể xác thực mã xác nhận.");
+      setMessage(error.message || copy.claimError);
     } finally {
       setLoading(false);
     }
@@ -225,7 +408,7 @@ export default function PaymentPage() {
         const data = await response.json().catch(() => ({}));
 
         if (!response.ok) {
-          throw new Error(data.message || "Không thể kiểm tra giao dịch.");
+          throw new Error(data.message || PAYMENT_COPY.transactionCheckError);
         }
 
         if (cancelled) {
@@ -244,24 +427,24 @@ export default function PaymentPage() {
 
         if (data.status === "PAID" && data.accessGranted) {
           setStatus("success");
-          setMessage("Thanh toán thành công. Bạn có thể vào trang tham quan.");
+          setMessage(PAYMENT_COPY.paidAndReady);
         } else if (data.status === "FAILED" || data.status === "CANCELLED") {
           setStatus("error");
-          setMessage("Giao dịch chưa hoàn tất hoặc đã bị hủy.");
+          setMessage(PAYMENT_COPY.transactionCancelled);
         } else {
           setStatus("pending");
           setMessage(
             data.method === "VNPAY"
-              ? "Giao dịch đang được xác nhận. Vui lòng chờ trong giây lát."
+              ? PAYMENT_COPY.vnpayPending
               : data.method === "PAYOO"
-                ? "Giao dịch Payoo Demo đang chờ xử lý."
-                : "Đang chờ nhân viên xác nhận giao dịch tiền mặt.",
+                ? PAYMENT_COPY.payooPending
+                : PAYMENT_COPY.cashWaiting,
           );
         }
       } catch (error) {
         if (!cancelled) {
           setStatus("error");
-          setMessage(error.message || "Không thể kiểm tra giao dịch.");
+          setMessage(error.message || PAYMENT_COPY.transactionCheckError);
         }
       } finally {
         if (!cancelled) {
@@ -300,58 +483,62 @@ export default function PaymentPage() {
 
           <div>
             <strong>Chùa Linh Ứng</strong>
-            <span>HỆ THỐNG THAM QUAN</span>
+            <span>{copy.siteLabel}</span>
           </div>
         </div>
 
         <span className="payment-secure">
           <ShieldCheck size={16} />
-          Thanh toán an toàn
+          {copy.secure}
         </span>
       </header>
 
       <section className="payment-container">
+        {copyLoading && (
+          <div className="payment-message" role="status">
+            {copy.loadingTranslation}
+          </div>
+        )}
+        {copyError && (
+          <div className="payment-message" role="alert">
+            {copyError}
+          </div>
+        )}
+
         <div className="payment-intro">
           <div className="payment-qr-icon">
             <QrCode size={30} />
           </div>
 
-          <p className="payment-eyebrow">CHÀO MỪNG QUÝ KHÁCH</p>
+          <p className="payment-eyebrow">{copy.welcome}</p>
 
-          <h1>Đăng ký quyền tham quan</h1>
+          <h1>{copy.pageTitle}</h1>
 
-          <p>
-            Vui lòng chọn phương thức thanh toán để sử dụng bản đồ tham quan và
-            khám phá các địa điểm tại Chùa Linh Ứng.
-          </p>
+          <p>{copy.introduction}</p>
 
-          <p className="payment-price">
-            Giá vé: <strong>50.000 đồng/lượt</strong>
-          </p>
+          <p className="payment-price">{copy.ticketPrice}</p>
         </div>
 
         <section className="payment-card">
           {status === "success" ? (
             <div className="payment-success">
               <CheckCircle2 size={48} />
-              <h2>Thanh toán thành công</h2>
-              <p>{message}</p>
+              <h2>{copy.paymentSuccess}</h2>
+              <p>{displayMessage}</p>
 
               <button
                 type="button"
                 className="payment-primary-button"
                 onClick={continueToVisitorSite}
               >
-                Vào trang tham quan
+                {copy.visitSite}
               </button>
             </div>
           ) : (
             <>
-              <h2>Chọn phương thức thanh toán</h2>
+              <h2>{copy.chooseMethod}</h2>
 
-              <p className="payment-description">
-                Chọn một trong hai hình thức bên dưới.
-              </p>
+              <p className="payment-description">{copy.chooseMethodHint}</p>
 
               <div className="payment-method-options">
                 <button
@@ -360,7 +547,7 @@ export default function PaymentPage() {
                     method === "online" ? "selected" : ""
                   }`}
                   onClick={() => setMethod("online")}
-                  disabled={loading || Boolean(transactionCode)}
+                  disabled={loading || copyLoading || Boolean(transactionCode)}
                 >
                   <span className="payment-option-icon online">
                     <CreditCard size={22} />
@@ -368,7 +555,7 @@ export default function PaymentPage() {
 
                   <span className="payment-option-text">
                     <strong>VNPAY</strong>
-                    <span>Thanh toán trực tuyến qua cổng VNPAY</span>
+                    <span>{copy.onlineDescription}</span>
                   </span>
 
                   <span className="payment-radio">
@@ -382,15 +569,15 @@ export default function PaymentPage() {
                     method === "cash" ? "selected" : ""
                   }`}
                   onClick={() => setMethod("cash")}
-                  disabled={loading || Boolean(transactionCode)}
+                  disabled={loading || copyLoading || Boolean(transactionCode)}
                 >
                   <span className="payment-option-icon cash">
                     <Banknote size={22} />
                   </span>
 
                   <span className="payment-option-text">
-                    <strong>Thanh toán tiền mặt</strong>
-                    <span>Nhận mã xác nhận từ nhân viên</span>
+                    <strong>{copy.cashMethod}</strong>
+                    <span>{copy.cashDescription}</span>
                   </span>
 
                   <span className="payment-radio">
@@ -401,25 +588,20 @@ export default function PaymentPage() {
 
               {method === "online" && (
                 <div className="payment-action-panel">
-                  <p>
-                    Thanh toán an toàn qua VNPAY Sandbox. Số tiền:{" "}
-                    <strong>50.000 đồng</strong>
-                  </p>
+                  <p>{copy.onlineAmount}</p>
 
                   <button
                     type="button"
                     className="payment-primary-button"
                     onClick={createVnpayPayment}
-                    disabled={loading}
+                    disabled={loading || copyLoading}
                   >
-                    {loading
-                      ? "Đang chuyển đến VNPAY..."
-                      : "Thanh toán bằng VNPAY"}
+                    {loading ? copy.connectingVnpay : copy.payByVnpay}
                   </button>
 
                   {message && (
                     <div className="payment-message" role="alert">
-                      <span>{message}</span>
+                      <span>{displayMessage}</span>
                     </div>
                   )}
                 </div>
@@ -429,45 +611,37 @@ export default function PaymentPage() {
                 <div className="payment-action-panel">
                   {!transactionCode ? (
                     <>
-                      <p>
-                        Tạo giao dịch trước, sau đó đưa mã giao dịch cho nhân
-                        viên tại điểm tham quan.
-                      </p>
+                      <p>{copy.createCashHint}</p>
 
                       <button
                         type="button"
                         className="payment-primary-button"
                         onClick={createCashPayment}
-                        disabled={loading}
+                        disabled={loading || copyLoading}
                       >
                         {loading
-                          ? "Đang tạo giao dịch..."
-                          : "Tạo giao dịch tiền mặt"}
+                          ? copy.creatingTransaction
+                          : copy.createCash}
                       </button>
                     </>
                   ) : (
                     <>
-                      <p>Mã giao dịch của bạn:</p>
+                      <p>{copy.yourTransactionCode}</p>
 
                       <strong className="payment-transaction-code-value">
                         {transactionCode}
                       </strong>
 
-                      <p>
-                        Số tiền cần thanh toán: <strong>50.000 đồng</strong>
-                      </p>
+                      <p>{copy.amountDue}</p>
 
-                      <p>
-                        Sau khi nhân viên xác nhận đã thu tiền, hãy nhập Claim
-                        code mà nhân viên cung cấp.
-                      </p>
+                      <p>{copy.claimInstructions}</p>
 
                       <form
                         className="payment-claim-form"
                         onSubmit={submitClaimCode}
                       >
                         <label htmlFor="claim-code">
-                          Mã xác nhận (Claim code)
+                          {copy.claimCodeLabel}
                         </label>
 
                         <input
@@ -475,16 +649,18 @@ export default function PaymentPage() {
                           value={claimCode}
                           onChange={(event) => setClaimCode(event.target.value)}
                           autoComplete="off"
-                          disabled={loading}
-                          placeholder="Nhập mã do nhân viên cung cấp"
+                          disabled={loading || copyLoading}
+                          placeholder={copy.claimCodePlaceholder}
                         />
 
                         <button
                           type="submit"
                           className="payment-primary-button"
-                          disabled={loading || !claimCode.trim()}
+                          disabled={
+                            loading || copyLoading || !claimCode.trim()
+                          }
                         >
-                          {loading ? "Đang xác thực..." : "Xác thực mã"}
+                          {loading ? copy.verifying : copy.verifyCode}
                         </button>
                       </form>
                     </>
@@ -492,7 +668,7 @@ export default function PaymentPage() {
 
                   {message && (
                     <div className="payment-message" role="alert">
-                      <span>{message}</span>
+                      <span>{displayMessage}</span>
                     </div>
                   )}
 
@@ -501,9 +677,9 @@ export default function PaymentPage() {
                       type="button"
                       className="payment-primary-button"
                       onClick={resetPayment}
-                      disabled={loading}
+                      disabled={loading || copyLoading}
                     >
-                      Tạo giao dịch khác
+                      {copy.anotherTransaction}
                     </button>
                   )}
                 </div>
@@ -511,7 +687,7 @@ export default function PaymentPage() {
 
               {!method && (
                 <div className="payment-action-panel">
-                  <p>Vui lòng chọn phương thức thanh toán ở trên.</p>
+                  <p>{copy.selectMethodHint}</p>
                 </div>
               )}
             </>
@@ -519,11 +695,7 @@ export default function PaymentPage() {
 
           <div className="payment-note">
             <ShieldCheck size={18} />
-            <span>
-              Payoo Demo chỉ mô phỏng kết quả thanh toán, không kết nối Payoo
-              thật. Thanh toán tiền mặt chỉ được cấp quyền sau khi nhân viên xác
-              nhận và Claim code hợp lệ.
-            </span>
+            <span>{copy.paymentNote}</span>
           </div>
         </section>
 
@@ -535,12 +707,12 @@ export default function PaymentPage() {
           }}
         >
           <ArrowLeft size={17} />
-          Quay lại bản đồ
+          {copy.backToMap}
         </button>
       </section>
 
       <footer className="payment-footer">
-        © {new Date().getFullYear()} Chùa Linh Ứng · Hệ thống tham quan
+        © {new Date().getFullYear()} Chùa Linh Ứng · {copy.siteLabel}
       </footer>
     </main>
   );

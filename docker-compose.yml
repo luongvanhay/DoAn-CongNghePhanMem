@@ -58,7 +58,7 @@ services:
     ports:
       - "3002:3002"
     environment:
-      - TRANSLATION_API_URL=${TRANSLATION_API_URL:-https://libretranslate.com/translate}
+      - TRANSLATION_API_URL=${TRANSLATION_API_URL:-}
       - TRANSLATION_API_KEY=${TRANSLATION_API_KEY:-}
     restart: always
 
