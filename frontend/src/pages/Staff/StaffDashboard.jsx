@@ -4,21 +4,17 @@ import CashPaymentManager from "../Admin/CashPaymentManager.jsx";
 
 export default function StaffDashboard() {
   const navigate = useNavigate();
-  const [token, setToken] = useState("");
-  const [username, setUsername] = useState("");
+  const [session] = useState(() => ({
+    token: localStorage.getItem("token") || "",
+    role: (localStorage.getItem("role") || "").toUpperCase(),
+    username: localStorage.getItem("username") || "Nhân viên",
+  }));
 
   useEffect(() => {
-    const savedToken = localStorage.getItem("token") || "";
-    const role = (localStorage.getItem("role") || "").toUpperCase();
-
-    if (!savedToken || role !== "ADMINSTAFF") {
+    if (!session.token || session.role !== "ADMINSTAFF") {
       navigate("/login", { replace: true });
-      return;
     }
-
-    setToken(savedToken);
-    setUsername(localStorage.getItem("username") || "Nhân viên");
-  }, [navigate]);
+  }, [navigate, session]);
 
   function logout() {
     localStorage.removeItem("token");
@@ -27,7 +23,7 @@ export default function StaffDashboard() {
     navigate("/login", { replace: true });
   }
 
-  if (!token) return null;
+  if (!session.token || session.role !== "ADMINSTAFF") return null;
 
   return (
     <div className="admin-shell">
@@ -35,7 +31,7 @@ export default function StaffDashboard() {
         <header className="admin-topbar">
           <div>
             <strong>Quản lý thanh toán tiền mặt</strong>
-            <p>Nhân viên: {username}</p>
+            <p>Nhân viên: {session.username}</p>
           </div>
 
           <button type="button" className="admin-refresh" onClick={logout}>
@@ -53,7 +49,7 @@ export default function StaffDashboard() {
           </div>
         </section>
 
-        <CashPaymentManager token={token} />
+        <CashPaymentManager token={session.token} />
       </main>
     </div>
   );

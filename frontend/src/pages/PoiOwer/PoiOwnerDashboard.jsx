@@ -124,9 +124,6 @@ export default function PoiOwnerDashboard() {
   );
 
   const loadPlaces = useCallback(async () => {
-    setLoading(true);
-    setError("");
-
     try {
       const data = await request(`${API_URL}/mine`);
       setPlaces(Array.isArray(data) ? data : []);
@@ -138,8 +135,14 @@ export default function PoiOwnerDashboard() {
   }, [request]);
 
   useEffect(() => {
-    loadPlaces();
+    void loadPlaces();
   }, [loadPlaces]);
+
+  function refreshPlaces() {
+    setLoading(true);
+    setError("");
+    void loadPlaces();
+  }
 
   function openCreateForm() {
     setEditingId("");
@@ -376,7 +379,7 @@ export default function PoiOwnerDashboard() {
 
             <button
               className="owner-secondary-btn"
-              onClick={loadPlaces}
+              onClick={refreshPlaces}
               disabled={loading}
             >
               <RefreshCw size={16} />

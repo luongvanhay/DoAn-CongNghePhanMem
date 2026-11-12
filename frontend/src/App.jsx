@@ -271,14 +271,13 @@ function MapApp({ language, onChangeLanguage, onOpenLanguageSelection }) {
     let cancelled = false;
 
     async function loadPlaces() {
-      setLoading(true);
-      setApiError("");
-      setTranslationError("");
-      setLocalizedPlaces([]);
-      setSelected(null);
-
       try {
         const data = await getContents();
+
+        if (!cancelled) {
+          setApiError("");
+          setTranslationError("");
+        }
 
         if (!Array.isArray(data)) {
           throw new Error("API không trả về danh sách địa điểm hợp lệ.");
@@ -1079,6 +1078,7 @@ function VisitorApp() {
   return language ? (
     sessionStorage.getItem("visitorPaid") === "1" ? (
       <MapApp
+        key={language}
         language={language}
         onChangeLanguage={selectLanguage}
         onOpenLanguageSelection={openLanguageSelection}

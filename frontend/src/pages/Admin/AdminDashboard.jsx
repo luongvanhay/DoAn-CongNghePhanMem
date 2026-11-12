@@ -1203,7 +1203,7 @@ export default function AdminDashboard() {
 
   // Trạng thái dữ liệu thống kê
   const [stats, setStats] = useState(initialStats);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [lastUpdated, setLastUpdated] = useState(null);
   const [activeVisitors, setActiveVisitors] = useState(0);
@@ -1284,10 +1284,7 @@ export default function AdminDashboard() {
 
   // Chỉ tải thống kê khi Admin đã đăng nhập
   useEffect(() => {
-    if (!token) {
-      setLoading(false);
-      return;
-    }
+    if (!token) return undefined;
 
     const timerId = setTimeout(() => {
       void loadStats();
