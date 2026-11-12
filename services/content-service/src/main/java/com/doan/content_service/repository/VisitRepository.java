@@ -1,3 +1,4 @@
+
 package com.doan.content_service.repository;
 
 import com.doan.content_service.model.Visit;
@@ -15,4 +16,6 @@ public interface VisitRepository
     List<Visit> findTop100ByOrderByVisitedAtDesc();
 
     long countByVisitedAtGreaterThanEqual(LocalDateTime from);
+
+    long countByLastSeenAtGreaterThanEqual(LocalDateTime from);
 }

@@ -14,14 +14,27 @@ public class CorsConfig {
     @Bean
     public CorsFilter corsFilter() {
         CorsConfiguration config = new CorsConfiguration();
+
         config.setAllowedOriginPatterns(
-                List.of("http://localhost:*", "http://127.0.0.1:*"));
+                List.of(
+                        "http://localhost:*",
+                        "http://127.0.0.1:*",
+                        "https://*.ngrok-free.dev",
+                        "https://*.ngrok-free.app"
+                )
+        );
+
         config.setAllowedMethods(
-                List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
+                List.of("GET", "POST", "PUT", "DELETE", "OPTIONS")
+        );
+
         config.setAllowedHeaders(List.of("*"));
 
-        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
+        UrlBasedCorsConfigurationSource source =
+                new UrlBasedCorsConfigurationSource();
+
         source.registerCorsConfiguration("/**", config);
+
         return new CorsFilter(source);
     }
 }

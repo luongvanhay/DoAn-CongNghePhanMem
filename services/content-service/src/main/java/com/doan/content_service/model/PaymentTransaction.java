@@ -28,6 +28,8 @@ public class PaymentTransaction {
 
     private String source;
 
+    private String sessionId;
+
     private String status;
 
     private boolean accessGranted = false;
@@ -60,6 +62,9 @@ public class PaymentTransaction {
 
     public String getSource() { return source; }
     public void setSource(String source) { this.source = source; }
+
+    public String getSessionId() { return sessionId; }
+    public void setSessionId(String sessionId) { this.sessionId = sessionId; }
 
     public String getStatus() { return status; }
     public void setStatus(String status) { this.status = status; }

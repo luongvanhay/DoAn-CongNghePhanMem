@@ -28,6 +28,8 @@ public class Visit {
     @Indexed
     private LocalDateTime visitedAt;
 
+    private LocalDateTime lastSeenAt;
+
     public Visit() {
     }
 
@@ -72,5 +74,13 @@ public class Visit {
 
     public LocalDateTime getVisitedAt() {
         return visitedAt;
+    }
+
+    public LocalDateTime getLastSeenAt() {
+        return lastSeenAt;
+    }
+
+    public void touchPresence() {
+        this.lastSeenAt = LocalDateTime.now(VN_ZONE);
     }
 }

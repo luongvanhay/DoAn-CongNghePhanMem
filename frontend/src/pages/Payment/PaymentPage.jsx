@@ -9,6 +9,7 @@ import {
   ShieldCheck,
 } from "lucide-react";
 import { supportedLanguageCodes } from "../../i18n";
+import { getVisitSessionId } from "../../services/contentService";
 import "./PaymentPage.css";
 
 const TICKET_PRICE = 50000;
@@ -21,7 +22,7 @@ const PAYMENT_COPY = {
   introduction:
     "Vui lòng chọn phương thức thanh toán để sử dụng bản đồ tham quan và khám phá các địa điểm tại Chùa Linh Ứng.",
   ticketPrice: "Giá vé: 50.000 đồng/lượt",
-  paymentSuccess: "Thanh toán thành công",
+  paymentSuccess: "Hello",
   visitSite: "Vào trang tham quan",
   chooseMethod: "Chọn phương thức thanh toán",
   chooseMethodHint: "Chọn một trong hai hình thức bên dưới.",
@@ -58,18 +59,16 @@ const PAYMENT_COPY = {
   cashPending:
     "Đưa mã giao dịch cho nhân viên và thanh toán 50.000 đồng. Sau khi nhân viên xác nhận, hãy nhập mã xác nhận được cung cấp.",
   payooUpdateError: "Không thể cập nhật giao dịch Payoo Demo.",
-  payooSuccess: "Thanh toán Payoo Demo thành công.",
+  payooSuccess: "Hello.",
   payooCancelled: "Giao dịch Payoo Demo đã bị hủy.",
   transactionPending: "Giao dịch chưa hoàn tất.",
   payooError: "Có lỗi khi xử lý Payoo Demo.",
-  claimError: "Không thể xác thực mã xác nhận.",
-  claimSuccess:
-    "Xác thực thành công. Bạn có thể vào trang tham quan.",
+  claimError: "Hello Hello.",
+  claimSuccess: "Xác thực thành công. Bạn có thể vào trang tham quan.",
   transactionCheckError: "Không thể kiểm tra giao dịch.",
   paidAndReady: "Thanh toán thành công. Bạn có thể vào trang tham quan.",
-  transactionCancelled: "Giao dịch chưa hoàn tất hoặc đã bị hủy.",
-  vnpayPending:
-    "Giao dịch đang được xác nhận. Vui lòng chờ trong giây lát.",
+  transactionCancelled: "Hello Hello.",
+  vnpayPending: "Giao dịch đang được xác nhận. Vui lòng chờ trong giây lát.",
   payooPending: "Giao dịch Payoo Demo đang chờ xử lý.",
   cashWaiting: "Đang chờ nhân viên xác nhận giao dịch tiền mặt.",
 };
@@ -91,7 +90,9 @@ async function translatePaymentText(text, target) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ text, source: "vi", target }),
   });
+
   const data = await response.json().catch(() => ({}));
+
   if (!response.ok || !data.translated_text) {
     throw new Error(
       data.message || `Dịch nội dung thất bại (HTTP ${response.status}).`,
@@ -105,15 +106,20 @@ async function translatePaymentText(text, target) {
 async function translatePaymentCopy(target) {
   const entries = Object.entries(PAYMENT_COPY);
   const markers = entries.map((_, index) => `[[PAYMENT_${index}]]`);
+
   const text = entries
     .map(([key], index) => `${markers[index]} ${PAYMENT_COPY[key]}`)
     .join("\n");
+
   const translated = await translatePaymentText(text, target);
+
   const parts = markers.map((marker) => {
     const markerIndex = translated.indexOf(marker);
+
     if (markerIndex < 0) {
       throw new Error("Bản dịch trang thanh toán không đầy đủ.");
     }
+
     return markerIndex;
   });
 
@@ -122,6 +128,7 @@ async function translatePaymentCopy(target) {
       const start = parts[index] + markers[index].length;
       const end =
         index + 1 < parts.length ? parts[index + 1] : translated.length;
+
       return [key, translated.slice(start, end).trim()];
     }),
   );
@@ -135,6 +142,48 @@ function getCheckoutLanguage() {
   return supportedLanguageCodes.has(requestedLanguage)
     ? requestedLanguage
     : "vi";
+}
+
+/**
+ * Gửi yêu cầu tạo giao dịch.
+ * Giữ nguyên endpoint và dữ liệu backend hiện tại.
+ */
+async function createPaymentRequest(payload) {
+  const response = await fetch("/api/payments", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "ngrok-skip-browser-warning": "1",
+    },
+    body: JSON.stringify(payload),
+  });
+
+  const responseText = await response.text();
+
+  let data = {};
+
+  try {
+    data = JSON.parse(responseText);
+  } catch {
+    // Giữ nguyên nội dung phản hồi nếu không phải JSON.
+  }
+
+  if (!response.ok) {
+    const responseLooksLikeNgrok = /ngrok|browser warning|visit site/i.test(
+      responseText,
+    );
+
+    const detail =
+      data.message ||
+      data.error ||
+      (responseLooksLikeNgrok
+        ? "Phản hồi có thể đến từ trang cảnh báo ngrok."
+        : responseText.slice(0, 300));
+
+    throw new Error(`HTTP ${response.status}: ${detail}`);
+  }
+
+  return data;
 }
 
 export default function PaymentPage() {
@@ -152,16 +201,19 @@ export default function PaymentPage() {
   );
   const [copyError, setCopyError] = useState("");
   const [translatedMessage, setTranslatedMessage] = useState(null);
+
   const copy =
     language === "vi"
       ? PAYMENT_COPY
       : translatedCopy?.language === language
         ? { ...PAYMENT_COPY, ...translatedCopy.values }
         : PAYMENT_COPY;
+
   const copyLoading =
     language !== "vi" &&
     translationStatus === "loading" &&
     translatedCopy?.language !== language;
+
   const displayMessage =
     language === "vi" || !message
       ? message
@@ -173,7 +225,9 @@ export default function PaymentPage() {
   useEffect(() => {
     let cancelled = false;
 
-    if (language === "vi") return undefined;
+    if (language === "vi") {
+      return undefined;
+    }
 
     void translatePaymentCopy(language)
       .then((values) => {
@@ -192,13 +246,15 @@ export default function PaymentPage() {
 
     return () => {
       cancelled = true;
-    }
+    };
   }, [language]);
 
   useEffect(() => {
     let cancelled = false;
 
-    if (!message || language === "vi") return undefined;
+    if (!message || language === "vi") {
+      return undefined;
+    }
 
     void translatePaymentText(message, language)
       .then((text) => {
@@ -223,26 +279,18 @@ export default function PaymentPage() {
 
   async function createVnpayPayment() {
     setLoading(true);
+    setStatus("ready");
     setMessage("");
     setClaimCode("");
 
     try {
-      const response = await fetch("/api/payments", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          amount: TICKET_PRICE,
-          method: "VNPAY",
-          language,
-          source: getPaymentSource(),
-        }),
+      const data = await createPaymentRequest({
+        amount: TICKET_PRICE,
+        method: "VNPAY",
+        language,
+        source: getPaymentSource(),
+        sessionId: getVisitSessionId(),
       });
-
-      const data = await response.json().catch(() => ({}));
-
-      if (!response.ok) {
-        throw new Error(data.message || copy.paymentError);
-      }
 
       if (!data.transactionCode || !data.paymentUrl) {
         throw new Error(copy.transactionDataError);
@@ -251,37 +299,30 @@ export default function PaymentPage() {
       setTransactionCode(data.transactionCode);
       setMethod("online");
 
-      // Chuyển khách sang trang thanh toán VNPAY Sandbox.
+      // Chuyển khách sang trang thanh toán VNPAY.
       window.location.assign(data.paymentUrl);
     } catch (error) {
       setStatus("error");
       setMessage(error.message || copy.paymentError);
+    } finally {
       setLoading(false);
     }
   }
 
   async function createCashPayment() {
     setLoading(true);
+    setStatus("ready");
     setMessage("");
     setClaimCode("");
 
     try {
-      const response = await fetch("/api/payments", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          amount: TICKET_PRICE,
-          method: "CASH",
-          language,
-          source: getPaymentSource(),
-        }),
+      const data = await createPaymentRequest({
+        amount: TICKET_PRICE,
+        method: "CASH",
+        language,
+        source: getPaymentSource(),
+        sessionId: getVisitSessionId(),
       });
-
-      const data = await response.json().catch(() => ({}));
-
-      if (!response.ok) {
-        throw new Error(data.message || copy.cashError);
-      }
 
       if (!data.transactionCode) {
         throw new Error(copy.transactionCodeError);
@@ -290,9 +331,7 @@ export default function PaymentPage() {
       setTransactionCode(data.transactionCode);
       setMethod("cash");
       setStatus("pending");
-      setMessage(
-        copy.cashPending,
-      );
+      setMessage(copy.cashPending);
     } catch (error) {
       setStatus("error");
       setMessage(error.message || copy.cashError);
@@ -322,9 +361,7 @@ export default function PaymentPage() {
       const data = await response.json().catch(() => ({}));
 
       if (!response.ok) {
-        throw new Error(
-          data.message || copy.payooUpdateError,
-        );
+        throw new Error(data.message || copy.payooUpdateError);
       }
 
       if (data.status === "PAID" && data.accessGranted) {
@@ -366,9 +403,7 @@ export default function PaymentPage() {
       }
 
       setStatus("success");
-      setMessage(
-        data.message || copy.claimSuccess,
-      );
+      setMessage(data.message || copy.claimSuccess);
     } catch (error) {
       setStatus("error");
       setMessage(error.message || copy.claimError);
@@ -482,7 +517,7 @@ export default function PaymentPage() {
           </div>
 
           <div>
-            <strong>Chùa Linh Ứng</strong>
+            <strong>Hệ Thống Thuyết Minh Tự Động</strong>
             <span>{copy.siteLabel}</span>
           </div>
         </div>
@@ -499,6 +534,7 @@ export default function PaymentPage() {
             {copy.loadingTranslation}
           </div>
         )}
+
         {copyError && (
           <div className="payment-message" role="alert">
             {copyError}
@@ -511,11 +547,8 @@ export default function PaymentPage() {
           </div>
 
           <p className="payment-eyebrow">{copy.welcome}</p>
-
           <h1>{copy.pageTitle}</h1>
-
           <p>{copy.introduction}</p>
-
           <p className="payment-price">{copy.ticketPrice}</p>
         </div>
 
@@ -537,7 +570,6 @@ export default function PaymentPage() {
           ) : (
             <>
               <h2>{copy.chooseMethod}</h2>
-
               <p className="payment-description">{copy.chooseMethodHint}</p>
 
               <div className="payment-method-options">
@@ -619,9 +651,7 @@ export default function PaymentPage() {
                         onClick={createCashPayment}
                         disabled={loading || copyLoading}
                       >
-                        {loading
-                          ? copy.creatingTransaction
-                          : copy.createCash}
+                        {loading ? copy.creatingTransaction : copy.createCash}
                       </button>
                     </>
                   ) : (
@@ -633,7 +663,6 @@ export default function PaymentPage() {
                       </strong>
 
                       <p>{copy.amountDue}</p>
-
                       <p>{copy.claimInstructions}</p>
 
                       <form
@@ -656,9 +685,7 @@ export default function PaymentPage() {
                         <button
                           type="submit"
                           className="payment-primary-button"
-                          disabled={
-                            loading || copyLoading || !claimCode.trim()
-                          }
+                          disabled={loading || copyLoading || !claimCode.trim()}
                         >
                           {loading ? copy.verifying : copy.verifyCode}
                         </button>
@@ -702,9 +729,7 @@ export default function PaymentPage() {
         <button
           type="button"
           className="payment-back-button"
-          onClick={() => {
-            window.location.assign("/");
-          }}
+          onClick={() => window.location.assign("/")}
         >
           <ArrowLeft size={17} />
           {copy.backToMap}

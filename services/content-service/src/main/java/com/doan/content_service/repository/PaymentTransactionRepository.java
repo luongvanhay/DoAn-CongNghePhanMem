@@ -14,6 +14,11 @@ public interface PaymentTransactionRepository
 
     Optional<PaymentTransaction> findByClaimCode(String claimCode);
 
+    List<PaymentTransaction> findByStatus(String status);
+
+    Optional<PaymentTransaction> findFirstBySessionIdAndStatusAndAccessGranted(
+            String sessionId, String status, boolean accessGranted);
+
     List<PaymentTransaction> findByMethodAndStatusOrderByCreatedAtDesc(
             String method, String status);
 }

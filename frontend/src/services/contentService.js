@@ -12,7 +12,7 @@ export async function getContents() {
 }
 
 // Lấy hoặc tạo mã nhận diện ẩn danh của trình duyệt
-function getVisitorId() {
+export function getVisitorId() {
   let id = localStorage.getItem("visitorId");
 
   if (!id) {
@@ -27,7 +27,7 @@ function getVisitorId() {
   return id;
 }
 
-function getVisitSessionId() {
+export function getVisitSessionId() {
   let id = sessionStorage.getItem("visitSessionId");
 
   if (!id) {
@@ -40,6 +40,23 @@ function getVisitSessionId() {
   }
 
   return id;
+}
+
+export async function recordActivePresence(language = "") {
+  try {
+    await fetch(`${API_BASE_URL}/visits/presence`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        visitorId: getVisitorId(),
+        sessionId: getVisitSessionId(),
+        source: new URLSearchParams(window.location.search).get("source") === "qr" ? "qr" : "direct",
+        language,
+      }),
+    });
+  } catch (error) {
+    console.error("Khong the cap nhat hien dien:", error);
+  }
 }
 
 // Lưu một lượt truy cập theo tab và cập nhật ngôn ngữ đã chọn.

@@ -42,7 +42,8 @@ public class User {
    public enum Role {
     ADMIN,
     ADMINSTAFF,
-    PROVIDER
+    PROVIDER,
+    VISITOR
 }
 
     public enum AccountStatus {

@@ -35,10 +35,23 @@ public class ContentController {
         return Map.of("service", "content-service", "status", "ok");
     }
 
-    @GetMapping("/contents")
-    public List<Content> getAll() {
-        return repository.findAll();
-    }
+
+// Danh sách POI đang hoạt động, dành cho bản đồ công khai.
+@GetMapping("/contents")
+public List<Content> getAllContents() {
+    return repository.findAll().stream()
+            .filter(c -> Boolean.TRUE.equals(c.getActive()))
+            .filter(c -> c.getLatitude() != null
+                    && c.getLongitude() != null)
+            .toList();
+}
+
+@GetMapping("/contents/mine")
+public List<Content> getMyContents(HttpServletRequest httpRequest) {
+    checkCanManageContent(httpRequest);
+    String userId = getUserId(httpRequest);
+    return repository.findByCreatedBy(userId);
+}
 
     @GetMapping("/contents/{id}")
     public Content getById(@PathVariable String id) {
@@ -79,20 +92,24 @@ public class ContentController {
                 .toList();
     }
 
-    @PostMapping("/contents")
-    @ResponseStatus(HttpStatus.CREATED)
-    public Content create(
-            @Valid @RequestBody ContentRequest request,
-            HttpServletRequest httpRequest) {
 
-        String userId = getUserId(httpRequest);
+@PostMapping("/contents")
+@ResponseStatus(HttpStatus.CREATED)
+public Content create(
+        @Valid @RequestBody ContentRequest request,
+        HttpServletRequest httpRequest) {
 
-        Content content = new Content();
-        applyRequest(content, request);
-        content.setCreatedBy(userId);
+    checkCanManageContent(httpRequest);
 
-        return repository.save(content);
-    }
+    String userId = getUserId(httpRequest);
+
+    Content content = new Content();
+    applyRequest(content, request);
+    content.setCreatedBy(userId);
+
+    return repository.save(content);
+}
+
 
     @PutMapping("/contents/{id}")
     public Content update(
@@ -102,6 +119,7 @@ public class ContentController {
 
         Content content = findContent(id);
         checkOwnerOrAdmin(content, httpRequest);
+        checkCanManageContent(httpRequest);
         applyRequest(content, request);
 
         // Khong thay doi createdBy khi cap nhat.
@@ -116,6 +134,7 @@ public class ContentController {
 
         Content content = findContent(id);
         checkOwnerOrAdmin(content, httpRequest);
+        checkCanManageContent(httpRequest);
         repository.delete(content);
     }
 
@@ -129,6 +148,7 @@ public class ContentController {
 
         Content content = findContent(id);
         checkOwnerOrAdmin(content, httpRequest);
+        checkCanManageContent(httpRequest);
 
         String code = normalizeLanguage(lang);
 
@@ -157,6 +177,7 @@ public class ContentController {
 
         Content content = findContent(id);
         checkOwnerOrAdmin(content, httpRequest);
+        checkCanManageContent(httpRequest);
 
         String code = normalizeLanguage(lang);
 
@@ -190,23 +211,70 @@ public class ContentController {
         return value.toString();
     }
 
-    private void checkOwnerOrAdmin(
-            Content content, HttpServletRequest request) {
 
-        Object roleValue = request.getAttribute("role");
-        String userId = getUserId(request);
+private String getRole(HttpServletRequest request) {
+    Object roleValue = request.getAttribute("role");
 
-        boolean isAdmin = roleValue != null
-                && "ADMIN".equalsIgnoreCase(
-                        roleValue.toString().replace("ROLE_", ""));
-
-        if (!isAdmin && (content.getCreatedBy() == null
-                || !content.getCreatedBy().equals(userId))) {
-            throw new ResponseStatusException(
-                    HttpStatus.FORBIDDEN,
-                    "Ban chi duoc sua hoac xoa noi dung do minh tao");
-        }
+    if (roleValue == null) {
+        throw new ResponseStatusException(
+                HttpStatus.FORBIDDEN,
+                "Không xác định được vai trò người dùng");
     }
+
+    return roleValue.toString()
+        .replaceFirst("^ROLE_", "")
+        .trim()
+        .toUpperCase(java.util.Locale.ROOT);
+}
+
+private void checkCanManageContent(HttpServletRequest request) {
+    getUserId(request);
+    String role = getRole(request);
+
+    if ("ADMIN".equals(role)) {
+        return;
+    }
+
+    if (!"PROVIDER".equals(role)) {
+        throw new ResponseStatusException(
+                HttpStatus.FORBIDDEN,
+                "Tài khoản không có quyền quản lý địa điểm");
+    }
+
+    Object verifiedValue =
+            request.getAttribute("poiOwnerVerified");
+
+    if (!Boolean.TRUE.equals(verifiedValue)) {
+        throw new ResponseStatusException(
+                HttpStatus.FORBIDDEN,
+                "Tài khoản POI chưa được Admin xác minh");
+    }
+}
+
+private void checkOwnerOrAdmin(
+        Content content,
+        HttpServletRequest request) {
+
+    String role = getRole(request);
+    String userId = getUserId(request);
+
+    if ("ADMIN".equals(role)) {
+        return;
+    }
+
+    if (!"PROVIDER".equals(role)) {
+        throw new ResponseStatusException(
+                HttpStatus.FORBIDDEN,
+                "Tài khoản không có quyền quản lý địa điểm");
+    }
+
+    if (!userId.equals(content.getCreatedBy())) {
+        throw new ResponseStatusException(
+                HttpStatus.FORBIDDEN,
+                "Bạn chỉ được quản lý địa điểm do mình tạo");
+    }
+}
+
 
     private double distanceMeters(
             double lat1, double lon1,
@@ -315,4 +383,5 @@ public class ContentController {
             }
         }
     }
+
 }

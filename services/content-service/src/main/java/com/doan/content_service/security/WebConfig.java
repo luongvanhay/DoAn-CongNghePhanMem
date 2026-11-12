@@ -22,7 +22,8 @@ public class WebConfig implements WebMvcConfigurer {
                         "/contents/**",
                         "/payments/cash/pending",
                         "/payments/*/confirm-cash",
-                        "/visits/recent"
+                        "/visits/recent",
+                        "/visits/stats"
                 );
     }
 }

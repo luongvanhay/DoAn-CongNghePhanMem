@@ -12,7 +12,7 @@ function CashPaymentManager({ token }) {
     setLoading(true);
     setError("");
     try {
-      const response = await fetch("/api/payments/cash/pending", {
+      const response = await fetch("/api/content/payments/cash/pending", {
         headers: {
           Accept: "application/json",
           Authorization: `Bearer ${token}`,
@@ -20,7 +20,11 @@ function CashPaymentManager({ token }) {
       });
       setPayments(await readResponse(response));
     } catch (err) {
-      setError(err.message || "Không tải được giao dịch tiền mặt.");
+      setError(
+        err instanceof TypeError
+          ? "Không kết nối được máy chủ thanh toán. Kiểm tra API Gateway và content-service rồi thử làm mới."
+          : err.message || "Không tải được giao dịch tiền mặt.",
+      );
     } finally {
       setLoading(false);
     }
@@ -39,7 +43,7 @@ function CashPaymentManager({ token }) {
     setMessage("");
     try {
       const response = await fetch(
-        `/api/payments/${encodeURIComponent(transactionCode)}/confirm-cash`,
+        `/api/content/payments/${encodeURIComponent(transactionCode)}/confirm-cash`,
         {
           method: "POST",
           headers: {
@@ -60,7 +64,11 @@ function CashPaymentManager({ token }) {
       }));
       setMessage(`Đã xác nhận thu tiền cho giao dịch ${transactionCode}.`);
     } catch (err) {
-      setError(err.message || "Không thể xác nhận giao dịch tiền mặt.");
+      setError(
+        err instanceof TypeError
+          ? "Không kết nối được máy chủ thanh toán. Kiểm tra API Gateway và content-service rồi thử lại."
+          : err.message || "Không thể xác nhận giao dịch tiền mặt.",
+      );
     } finally {
       setConfirmingCode("");
     }

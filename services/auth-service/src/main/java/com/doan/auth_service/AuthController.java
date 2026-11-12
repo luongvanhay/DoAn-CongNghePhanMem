@@ -12,8 +12,12 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.*;
-
+import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.JwtException;
 import java.util.Map;
+import java.util.List;
+import java.util.LinkedHashMap;
+import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/auth")
@@ -69,11 +73,10 @@ public class AuthController {
         }
 
         User user = new User(
-                username,
-                passwordEncoder.encode(request.getPassword()),
-                User.Role.PROVIDER
-        );
-
+        username,
+        passwordEncoder.encode(request.getPassword()),
+        User.Role.VISITOR
+);
         try {
 
             User savedUser = userRepository.save(user);
@@ -165,4 +168,116 @@ userRepository.findByUsername(request.getUsername().trim())
                 )
         );
     }
+
+    @PostMapping(
+        value = "/admin/create-staff",
+        produces = MediaType.APPLICATION_JSON_VALUE
+)
+public ResponseEntity<Map<String, String>> createStaff(
+        @RequestHeader(
+                value = "Authorization",
+                required = false
+        ) String authorization,
+        @RequestBody RegisterRequest request) {
+
+    // Kiểm tra token
+    if (authorization == null
+            || !authorization.startsWith("Bearer ")) {
+        return ResponseEntity.status(401).body(
+                Map.of("message", "Vui lòng đăng nhập bằng tài khoản Admin")
+        );
+    }
+
+    try {
+        String token = authorization.substring(7);
+Claims claims = jwtService.validateTokenAndGetClaims(token);
+
+if (!"ADMIN".equals(claims.get("role", String.class))) {
+    return ResponseEntity.status(403).body(
+            Map.of("message", "Chỉ Admin được tạo tài khoản Staff")
+    );
+}
+    } catch (JwtException | IllegalArgumentException e) {
+        return ResponseEntity.status(401).body(
+                Map.of("message", "Token không hợp lệ hoặc đã hết hạn")
+        );
+    }
+
+    if (request.getUsername() == null
+            || request.getUsername().isBlank()) {
+        return ResponseEntity.badRequest().body(
+                Map.of("message", "Username không được để trống")
+        );
+    }
+
+    if (request.getPassword() == null
+            || request.getPassword().length() < 8) {
+        return ResponseEntity.badRequest().body(
+                Map.of("message", "Mật khẩu phải có ít nhất 8 ký tự")
+        );
+    }
+
+    String username = request.getUsername().trim();
+
+    if (userRepository.existsByUsername(username)) {
+        return ResponseEntity.status(409).body(
+                Map.of("message", "Username đã tồn tại")
+        );
+    }
+
+    // Kiểm tra enum User.Role trước khi sử dụng STAFF
+    User staff = new User(
+            username,
+            passwordEncoder.encode(request.getPassword()),
+            User.Role.ADMINSTAFF
+    );
+
+    try {
+        User savedUser = userRepository.save(staff);
+
+        return ResponseEntity.status(201).body(
+                Map.of(
+                        "message", "Tạo tài khoản Staff thành công",
+                        "id", savedUser.getId(),
+                        "username", savedUser.getUsername(),
+                        "role", savedUser.getRole().name()
+                )
+        );
+    } catch (DuplicateKeyException e) {
+        return ResponseEntity.status(409).body(
+                Map.of("message", "Username đã tồn tại")
+        );
+    }
+}
+
+@GetMapping(value = "/admin/staff", produces = MediaType.APPLICATION_JSON_VALUE)
+public ResponseEntity<?> listStaff(
+        @RequestHeader(value = "Authorization", required = false) String authorization) {
+    if (authorization == null || !authorization.startsWith("Bearer ")
+            || authorization.substring(7).isBlank()) {
+        return ResponseEntity.status(401).body(Map.of("message", "Vui lòng đăng nhập Admin"));
+    }
+
+    try {
+        Claims claims = jwtService.validateTokenAndGetClaims(authorization.substring(7).trim());
+        if (!"ADMIN".equals(claims.get("role", String.class))) {
+            return ResponseEntity.status(403).body(Map.of("message", "Chỉ Admin được xem danh sách nhân viên"));
+        }
+    } catch (JwtException | IllegalArgumentException exception) {
+        return ResponseEntity.status(401).body(Map.of("message", "Token không hợp lệ hoặc đã hết hạn"));
+    }
+
+    List<Map<String, Object>> staff = userRepository.findByRole(User.Role.ADMINSTAFF)
+            .stream()
+            .map(user -> {
+                Map<String, Object> item = new LinkedHashMap<>();
+                item.put("id", user.getId());
+                item.put("username", user.getUsername());
+                item.put("status", user.getStatus() == null ? "ACTIVE" : user.getStatus().name());
+                item.put("createdAt", user.getCreatedAt());
+                return item;
+            })
+            .collect(Collectors.toList());
+    return ResponseEntity.ok(staff);
+}
 }

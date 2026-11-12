@@ -5,18 +5,23 @@ import { languages } from "../../i18n";
 import "./AdminDashboard.css";
 import CashPaymentManager from "./CashPaymentManager.jsx";
 import { formatNumber, readResponse } from "./adminUtils.js";
+import StaffAccountManager from "./StaffAccountManager.jsx";
 
 // ==================== CẤU HÌNH API ====================
 
 // API lấy thống kê lượt truy cập website
 const STATS_URL = "/api/content/visits/stats";
 const VISITOR_LOG_URL = "/api/content/visits/recent";
+const ACTIVE_VISITORS_URL = "/api/content/visits/active";
+const PAYMENT_STATS_URL = "/api/content/payments/stats";
+const ACTIVE_VISITORS_UPDATE_SECONDS = 2;
 
 // API đăng nhập tài khoản
 const LOGIN_URL = "/api/auth/login";
 
 // API lấy danh sách hồ sơ POI đang chờ Admin duyệt
 const PENDING_URL = "/api/auth/poi-owner/applications/pending";
+const APPROVED_POI_OWNERS_URL = "/api/auth/poi-owner/applications/approved";
 
 // API quản lý địa điểm và nội dung thuyết minh
 const CONTENTS_URL = "/api/content/contents";
@@ -27,6 +32,8 @@ const initialStats = {
   uniqueVisitors: 0,
   visitsToday: 0,
   uniqueVisitorsToday: 0,
+  totalIncome: 0,
+  paidTransactions: 0,
 };
 
 // ==================== THẺ THỐNG KÊ ====================
@@ -219,6 +226,7 @@ const loginInputStyle = {
 function PoiApplications({ token }) {
   // Danh sách hồ sơ mà backend trả về
   const [applications, setApplications] = useState([]);
+  const [approvedApplications, setApprovedApplications] = useState([]);
 
   // Trạng thái tải danh sách, lỗi, thông báo và hồ sơ đang được xử lý
   const [loading, setLoading] = useState(true);
@@ -232,16 +240,18 @@ function PoiApplications({ token }) {
     setError("");
 
     try {
-      const response = await fetch(PENDING_URL, {
-        headers: {
-          Accept: "application/json",
-
-          // JWT giúp backend xác định người gửi là Admin đã đăng nhập
-          Authorization: `Bearer ${token}`,
-        },
-      });
-
-      const data = await readResponse(response);
+      const headers = {
+        Accept: "application/json",
+        Authorization: `Bearer ${token}`,
+      };
+      const [pendingResponse, approvedResponse] = await Promise.all([
+        fetch(PENDING_URL, { headers }),
+        fetch(APPROVED_POI_OWNERS_URL, { headers }),
+      ]);
+      const [data, approvedData] = await Promise.all([
+        readResponse(pendingResponse),
+        readResponse(approvedResponse),
+      ]);
 
       // API hiện tại được thiết kế để trả về một mảng hồ sơ
       if (!Array.isArray(data)) {
@@ -249,6 +259,10 @@ function PoiApplications({ token }) {
       }
 
       setApplications(data);
+      if (!Array.isArray(approvedData)) {
+        throw new Error("Danh sách địa điểm đã duyệt không đúng định dạng.");
+      }
+      setApprovedApplications(approvedData);
     } catch (err) {
       setError(err.message || "Không tải được danh sách hồ sơ POI.");
     } finally {
@@ -462,6 +476,62 @@ function PoiApplications({ token }) {
                 </article>
               );
             })}
+          </div>
+        )}
+      </article>
+
+      <article className="admin-poi-panel" style={{ marginTop: 20 }}>
+        <div className="admin-poi-heading">
+          <div>
+            <h2>Địa điểm đã duyệt</h2>
+            <p>Các hồ sơ POI Owner đã được Admin chấp thuận.</p>
+          </div>
+          <span className="admin-poi-count">
+            {approvedApplications.length} địa điểm
+          </span>
+        </div>
+
+        {loading ? (
+          <div className="admin-poi-empty">Đang tải danh sách địa điểm đã duyệt...</div>
+        ) : approvedApplications.length === 0 ? (
+          <div className="admin-poi-empty">Chưa có địa điểm nào được duyệt.</div>
+        ) : (
+          <div className="admin-poi-list">
+            {approvedApplications.map((application) => (
+              <article className="admin-poi-card" key={application.id}>
+                <div className="admin-poi-card-header">
+                  <div>
+                    <h3>{application.businessName || "Chưa có tên cơ sở"}</h3>
+                    <p className="admin-poi-contact">
+                      Người liên hệ: {application.contactName || "—"}
+                    </p>
+                  </div>
+                  <span className="admin-poi-status">Đã duyệt</span>
+                </div>
+                <div className="admin-poi-details">
+                  <div className="admin-poi-detail">
+                    <strong>Địa chỉ</strong>
+                    <span>{application.address || "—"}</span>
+                  </div>
+                  <div className="admin-poi-detail">
+                    <strong>Điện thoại</strong>
+                    <span>{application.phone || "—"}</span>
+                  </div>
+                  <div className="admin-poi-detail">
+                    <strong>Email</strong>
+                    <span>{application.email || "—"}</span>
+                  </div>
+                  <div className="admin-poi-detail">
+                    <strong>Ngày duyệt</strong>
+                    <span>
+                      {application.reviewedAt
+                        ? new Date(application.reviewedAt).toLocaleString("vi-VN")
+                        : "—"}
+                    </span>
+                  </div>
+                </div>
+              </article>
+            ))}
           </div>
         )}
       </article>
@@ -1116,6 +1186,15 @@ export default function AdminDashboard() {
     currentPath === "/admin" || currentPath === "/admin/"
       ? "dashboard"
       : currentPath.replace("/admin/", "");
+  const pageTitles = {
+    dashboard: "Bảng điều khiển",
+    visits: "Thống kê truy cập",
+    payments: "Thanh toán tiền mặt",
+    "poi-owners": "Duyệt hồ sơ POI",
+    contents: "Quản lý thuyết minh",
+    staff: "Quản lý nhân viên",
+  };
+  const pageTitle = pageTitles[currentPage] || pageTitles.dashboard;
   // token được giữ trong state React, không lưu vào localStorage
   const [token, setToken] = useState("");
 
@@ -1127,52 +1206,95 @@ export default function AdminDashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [lastUpdated, setLastUpdated] = useState(null);
+  const [activeVisitors, setActiveVisitors] = useState(0);
+  const [activeVisitorsError, setActiveVisitorsError] = useState("");
 
   // Gọi API thống kê và cập nhật bốn chỉ số trên dashboard
+
+  // Gọi API thống kê lượt truy cập
   const loadStats = useCallback(async () => {
+    if (!token) {
+      setLoading(false);
+      return;
+    }
+
     setLoading(true);
     setError("");
 
     try {
-      const response = await fetch(STATS_URL, {
-        method: "GET",
-        headers: { Accept: "application/json" },
-      });
+      const headers = {
+        Accept: "application/json",
+        Authorization: `Bearer ${token}`,
+      };
+      const [response, paymentResponse] = await Promise.all([
+        fetch(STATS_URL, { method: "GET", headers }),
+        fetch(PAYMENT_STATS_URL, { method: "GET", headers }),
+      ]);
+      const [data, paymentData] = await Promise.all([
+        readResponse(response),
+        readResponse(paymentResponse),
+      ]);
 
-      if (!response.ok) {
-        throw new Error(`Không tải được thống kê (HTTP ${response.status}).`);
-      }
-
-      const data = await response.json();
-
-      // Dùng 0 nếu backend không trả về một chỉ số nào đó
       setStats({
         totalVisits: data.totalVisits ?? 0,
         uniqueVisitors: data.uniqueVisitors ?? 0,
         visitsToday: data.visitsToday ?? 0,
         uniqueVisitorsToday: data.uniqueVisitorsToday ?? 0,
+        totalIncome: paymentData.totalIncome ?? 0,
+        paidTransactions: paymentData.paidTransactions ?? 0,
       });
 
-      // Ghi lại thời điểm dữ liệu được tải thành công
       setLastUpdated(new Date());
     } catch (err) {
       setError(
-        `${err.message} Kiểm tra API ${STATS_URL} và cấu hình proxy/API Gateway.`,
+        `${err.message || "Không tải được thống kê."} ` +
+          `Kiểm tra API ${STATS_URL} và cấu hình Gateway.`,
       );
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [token]);
 
-  // Tải thống kê khi trang quản trị được khởi tạo
-  // Tải thống kê khi trang quản trị được khởi tạo
+  const loadActiveVisitors = useCallback(async () => {
+    if (!token) return;
+    try {
+      const response = await fetch(ACTIVE_VISITORS_URL, {
+        headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+      });
+      const data = await readResponse(response);
+      setActiveVisitors(data.activeVisitors ?? 0);
+      setActiveVisitorsError("");
+    } catch (err) {
+      setActiveVisitorsError(err.message || "Không tải được số khách đang truy cập.");
+    }
+  }, [token]);
+
   useEffect(() => {
+    if (!token || currentPage !== "dashboard") return undefined;
+    const initialTimerId = window.setTimeout(() => void loadActiveVisitors(), 0);
+    const timerId = window.setInterval(
+      loadActiveVisitors,
+      ACTIVE_VISITORS_UPDATE_SECONDS * 1000,
+    );
+    return () => {
+      window.clearTimeout(initialTimerId);
+      window.clearInterval(timerId);
+    };
+  }, [token, currentPage, loadActiveVisitors]);
+
+  // Chỉ tải thống kê khi Admin đã đăng nhập
+  useEffect(() => {
+    if (!token) {
+      setLoading(false);
+      return;
+    }
+
     const timerId = setTimeout(() => {
-      loadStats();
+      void loadStats();
     }, 0);
 
     return () => clearTimeout(timerId);
-  }, [loadStats]);
+  }, [token, loadStats]);
 
   // Định dạng giờ cập nhật gần nhất để hiển thị trên giao diện
   const timeLabel = lastUpdated
@@ -1202,8 +1324,8 @@ export default function AdminDashboard() {
         <div className="admin-brand">
           <div className="admin-brand-mark">D</div>
           <div>
-            <strong>DoAn CMS</strong>
-            <span>TRANG QUẢN TRỊ</span>
+            <strong>Trang Quản Trị</strong>
+            <span>Xin Chào Admin</span>
           </div>
         </div>
 
@@ -1261,6 +1383,12 @@ export default function AdminDashboard() {
             <span className="admin-nav-symbol">✎</span>
             Quản lý thuyết minh
           </NavLink>
+          <NavLink
+            to="/admin/staff"
+            className={({ isActive }) => (isActive ? "active" : "")}
+          >
+            Quản lý nhân viên
+          </NavLink>
         </nav>
 
         {/* Thông tin tài khoản đang đăng nhập */}
@@ -1277,7 +1405,7 @@ export default function AdminDashboard() {
         {/* Thanh trên cùng: đường dẫn, trạng thái và đăng xuất */}
         <header className="admin-topbar">
           <div className="admin-breadcrumb">
-            Quản trị <span>/</span> <strong>Bảng điều khiển</strong>
+            Quản trị <span>/</span> <strong>{pageTitle}</strong>
           </div>
 
           <div className="admin-topbar-right">
@@ -1380,18 +1508,34 @@ export default function AdminDashboard() {
               value={stats.uniqueVisitorsToday}
               hint="Khách riêng biệt hôm nay"
             />
+            <StatCard
+              icon="●"
+              tone="green"
+              label="Khách đã thanh toán đang truy cập"
+              value={activeVisitors}
+              hint={activeVisitorsError ? "Không thể cập nhật" : "Đang cập nhật trực tiếp"}
+            />
+            <StatCard
+              icon="₫"
+              tone="purple"
+              label="Tổng thu nhập"
+              value={stats.totalIncome}
+              hint={`${formatNumber(stats.paidTransactions)} giao dịch đã thanh toán · VNĐ`}
+            />
           </section>
         )}
-        {(currentPage === "dashboard" || currentPage === "visits") && (
+        {currentPage === "visits" && (
           <VisitorLog token={token} />
         )}
 
-        {currentPage === "dashboard" && <VisitorQrCard />}
+        {currentPage === "visits" && <VisitorQrCard />}
 
         {currentPage === "payments" && <CashPaymentManager token={token} />}
 
+        {currentPage === "staff" && <StaffAccountManager token={token} />}
+
         {/* Hai bảng tổng quan và trạng thái API */}
-        <section className="admin-content-grid">
+        {currentPage === "dashboard" && <section className="admin-content-grid">
           <article className="admin-panel admin-overview-panel">
             <div className="admin-panel-heading">
               <div>
@@ -1468,13 +1612,13 @@ export default function AdminDashboard() {
               Kiểm tra kết nối <span>→</span>
             </button>
           </article>
-        </section>
+        </section>}
 
-        {(currentPage === "dashboard" || currentPage === "contents") && (
+        {currentPage === "contents" && (
           <ContentManager token={token} />
         )}
         {/* Khu vực duyệt/từ chối hồ sơ POI; truyền JWT xuống component */}
-        {(currentPage === "dashboard" || currentPage === "poi-owners") && (
+        {currentPage === "poi-owners" && (
           <PoiApplications token={token} />
         )}
         {/* Chân trang quản trị */}

@@ -79,6 +79,10 @@ public class PaymentController {
         transaction.setMethod(method);
         transaction.setLanguage(normalizeLanguage(request.getLanguage()));
         transaction.setSource("qr".equals(request.getSource()) ? "qr" : null);
+        if (request.getSessionId() != null
+                && request.getSessionId().matches("^[A-Za-z0-9-]{8,64}$")) {
+            transaction.setSessionId(request.getSessionId());
+        }
         transaction.setStatus("PENDING");
         transaction.setAccessGranted(false);
         transaction.setCreatedAt(LocalDateTime.now());
@@ -108,6 +112,20 @@ public class PaymentController {
         }
 
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
+    }
+
+    @GetMapping("/stats")
+    public Map<String, Long> paymentStats() {
+        List<PaymentTransaction> paidTransactions =
+                paymentRepository.findByStatus("PAID");
+        long totalIncome = paidTransactions.stream()
+                .map(PaymentTransaction::getAmount)
+                .filter(java.util.Objects::nonNull)
+                .mapToLong(Long::longValue)
+                .sum();
+        return Map.of(
+                "totalIncome", totalIncome,
+                "paidTransactions", (long) paidTransactions.size());
     }
 
     // Tra cứu trạng thái giao dịch
@@ -459,6 +477,7 @@ public class PaymentController {
         private String method;
         private String language;
         private String source;
+        private String sessionId;
 
         public Long getAmount() {
             return amount;
@@ -490,6 +509,14 @@ public class PaymentController {
 
         public void setSource(String source) {
             this.source = source;
+        }
+
+        public String getSessionId() {
+            return sessionId;
+        }
+
+        public void setSessionId(String sessionId) {
+            this.sessionId = sessionId;
         }
     }
 
