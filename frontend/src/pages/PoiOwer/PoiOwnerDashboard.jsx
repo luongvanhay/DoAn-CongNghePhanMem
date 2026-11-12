@@ -97,7 +97,7 @@ export default function PoiOwnerDashboard() {
       });
 
       const text = await response.text();
-      let data = null;
+      let data;
 
       try {
         data = text ? JSON.parse(text) : null;
@@ -135,7 +135,10 @@ export default function PoiOwnerDashboard() {
   }, [request]);
 
   useEffect(() => {
-    void loadPlaces();
+    const timerId = window.setTimeout(() => {
+      void loadPlaces();
+    }, 0);
+    return () => window.clearTimeout(timerId);
   }, [loadPlaces]);
 
   function refreshPlaces() {

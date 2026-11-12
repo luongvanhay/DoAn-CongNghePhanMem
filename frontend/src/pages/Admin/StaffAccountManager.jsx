@@ -36,7 +36,10 @@ export default function StaffAccountManager({ token }) {
   }, [token]);
 
   useEffect(() => {
-    void loadStaff();
+    const timerId = window.setTimeout(() => {
+      void loadStaff();
+    }, 0);
+    return () => window.clearTimeout(timerId);
   }, [loadStaff]);
 
   async function handleSubmit(event) {

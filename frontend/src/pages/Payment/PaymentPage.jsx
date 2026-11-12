@@ -340,47 +340,6 @@ export default function PaymentPage() {
     }
   }
 
-  async function completePayooDemoPayment(result) {
-    if (!transactionCode || loading || status !== "pending") {
-      return;
-    }
-
-    setLoading(true);
-    setMessage("");
-
-    try {
-      const response = await fetch(
-        `/api/payments/${encodeURIComponent(transactionCode)}/payoo-demo/complete`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ result }),
-        },
-      );
-
-      const data = await response.json().catch(() => ({}));
-
-      if (!response.ok) {
-        throw new Error(data.message || copy.payooUpdateError);
-      }
-
-      if (data.status === "PAID" && data.accessGranted) {
-        setStatus("success");
-        setMessage(data.message || copy.payooSuccess);
-      } else if (data.status === "FAILED") {
-        setStatus("error");
-        setMessage(data.message || copy.payooCancelled);
-      } else {
-        setStatus("pending");
-        setMessage(data.message || copy.transactionPending);
-      }
-    } catch (error) {
-      setMessage(error.message || copy.payooError);
-    } finally {
-      setLoading(false);
-    }
-  }
-
   async function submitClaimCode(event) {
     event.preventDefault();
 
