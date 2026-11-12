@@ -62,9 +62,10 @@ jobs:
           distribution: temurin
           java-version: '17'
           cache: maven
+          cache-dependency-path: services/${{ matrix.service }}/pom.xml
       - name: Build service
         working-directory: services/${{ matrix.service }}
         env:
           JWT_SECRET: ${{ secrets.JWT_SECRET }}
-        run: mvn -B -ntp package
+        run: mvn -B -ntp -U package
 
