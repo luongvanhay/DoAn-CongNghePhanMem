@@ -140,7 +140,10 @@
 .language-selection-card h1 {
   margin: 10px 0;
   color: #253f30;
+<<<<<<< Updated upstream
   font-family: Georgia, serif;
+=======
+>>>>>>> Stashed changes
   font-size: clamp(28px, 5vw, 40px);
   font-weight: 500;
 }
@@ -295,7 +298,6 @@
 
 .hero h1 {
   margin: 20px 0 18px;
-  font-family: Georgia, serif;
   font-size: clamp(38px, 5vw, 61px);
   font-weight: 500;
   line-height: 1.16;
@@ -373,7 +375,6 @@
 }
 
 .hero-stats strong {
-  font-family: Georgia, serif;
   font-size: 25px;
   font-weight: 500;
 }
@@ -398,7 +399,6 @@
 .section-heading h2,
 .detail-content h2 {
   margin: 9px 0;
-  font-family: Georgia, serif;
   font-size: clamp(28px, 3vw, 36px);
   font-weight: 500;
   letter-spacing: -0.7px;
@@ -696,7 +696,6 @@
 
 .detail-image-overlay h2 {
   margin: 10px 0 0;
-  font-family: Georgia, serif;
   font-size: 31px;
   font-weight: 500;
 }
