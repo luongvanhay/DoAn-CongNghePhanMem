@@ -447,6 +447,7 @@ frontend/app-source.txt
 # Local secrets
 .env
 .env.*
+!.env.example
 
 # MongoDB local data and backups
 mongo_data/

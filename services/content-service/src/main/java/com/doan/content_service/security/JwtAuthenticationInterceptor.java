@@ -66,6 +66,10 @@ public class JwtAuthenticationInterceptor implements HandlerInterceptor {
                 HttpMethod.GET.matches(method)
                         && path.equals("/payments/cash/pending");
 
+        boolean readVnpayPayments =
+                HttpMethod.GET.matches(method)
+                        && path.equals("/payments/vnpay");
+
         boolean writeRequest =
                 HttpMethod.POST.matches(method)
                         || HttpMethod.PUT.matches(method)
@@ -80,7 +84,8 @@ public class JwtAuthenticationInterceptor implements HandlerInterceptor {
 
         if (!manageContent && !readVisitLog && !readVisitStats && !readActiveVisitors
                 && !readPaymentStats
-                && !confirmCashPayment && !readPendingCashPayments) {
+                && !confirmCashPayment && !readPendingCashPayments
+                && !readVnpayPayments) {
             return true;
         }
 
@@ -93,6 +98,7 @@ public class JwtAuthenticationInterceptor implements HandlerInterceptor {
                 && !readPaymentStats
                 && !readPendingCashPayments
                 && !confirmCashPayment
+                && !readVnpayPayments
                 && !protectedContentRead) {
             return true;
         }
@@ -117,7 +123,7 @@ public class JwtAuthenticationInterceptor implements HandlerInterceptor {
             String username = claims.get("username", String.class);
 
             boolean adminOnly = readVisitLog || readVisitStats || readActiveVisitors
-                    || readPaymentStats;
+                    || readPaymentStats || readVnpayPayments;
             boolean staffPaymentOperation =
                     confirmCashPayment || readPendingCashPayments;
 

@@ -5,7 +5,7 @@ import { languages } from "../../i18n";
 import "./AdminDashboard.css";
 import CashPaymentManager from "./CashPaymentManager.jsx";
 import { formatNumber, readResponse } from "./adminUtils.js";
-import StaffAccountManager from "./StaffAccountManager.jsx";
+import UserAccountManager from "./UserAccountManager.jsx";
 
 // ==================== CẤU HÌNH API ====================
 
@@ -14,6 +14,9 @@ const STATS_URL = "/api/content/visits/stats";
 const VISITOR_LOG_URL = "/api/content/visits/recent";
 const ACTIVE_VISITORS_URL = "/api/content/visits/active";
 const PAYMENT_STATS_URL = "/api/content/payments/stats";
+const USERS_URL = "/api/auth/admin/users";
+const PENDING_POI_URL = "/api/auth/poi-owner/applications/pending";
+const PENDING_CASH_URL = "/api/content/payments/cash/pending";
 const ACTIVE_VISITORS_UPDATE_SECONDS = 2;
 
 // API đăng nhập tài khoản
@@ -113,7 +116,7 @@ function AdminLogin({ onLogin }) {
         display: "grid",
         placeItems: "center",
         padding: 20,
-        background: "#f6f7fb",
+        background: "#fff",
       }}
     >
       <form
@@ -122,10 +125,10 @@ function AdminLogin({ onLogin }) {
           width: "100%",
           maxWidth: 420,
           padding: 30,
-          border: "1px solid #ececf4",
+          border: "1px solid #e7ece9",
           borderRadius: 18,
           background: "#fff",
-          boxShadow: "0 12px 40px #25214c0c",
+          boxShadow: "0 16px 44px #12351f10",
         }}
       >
         {/* Logo và tiêu đề trang đăng nhập */}
@@ -197,7 +200,7 @@ function AdminLogin({ onLogin }) {
             padding: 13,
             border: 0,
             borderRadius: 10,
-            background: "#6958d1",
+            background: "#267456",
             color: "#fff",
             fontWeight: 700,
             cursor: loading ? "wait" : "pointer",
@@ -1182,17 +1185,18 @@ export default function AdminDashboard() {
 
   const currentPath = location.pathname.replace(/\/+$/, "") || "/admin";
 
-  const currentPage =
+  const routePage =
     currentPath === "/admin" || currentPath === "/admin/"
       ? "dashboard"
       : currentPath.replace("/admin/", "");
+  const currentPage = routePage === "staff" ? "users" : routePage;
   const pageTitles = {
     dashboard: "Bảng điều khiển",
     visits: "Thống kê truy cập",
-    payments: "Thanh toán tiền mặt",
+    payments: "Giao dịch thanh toán",
     "poi-owners": "Duyệt hồ sơ POI",
     contents: "Quản lý thuyết minh",
-    staff: "Quản lý nhân viên",
+    users: "Quản lý người dùng",
   };
   const pageTitle = pageTitles[currentPage] || pageTitles.dashboard;
   // token được giữ trong state React, không lưu vào localStorage
@@ -1208,6 +1212,13 @@ export default function AdminDashboard() {
   const [lastUpdated, setLastUpdated] = useState(null);
   const [activeVisitors, setActiveVisitors] = useState(0);
   const [activeVisitorsError, setActiveVisitorsError] = useState("");
+  const [overviewCounts, setOverviewCounts] = useState({
+    users: 0,
+    poiRequests: 0,
+    cashPayments: 0,
+  });
+  const [overviewCountsLoading, setOverviewCountsLoading] = useState(false);
+  const [overviewCountsError, setOverviewCountsError] = useState("");
 
   // Gọi API thống kê và cập nhật bốn chỉ số trên dashboard
 
@@ -1269,8 +1280,45 @@ export default function AdminDashboard() {
     }
   }, [token]);
 
+  const loadOverviewCounts = useCallback(async () => {
+    if (!token) return;
+    setOverviewCountsLoading(true);
+    setOverviewCountsError("");
+
+    try {
+      const headers = {
+        Accept: "application/json",
+        Authorization: `Bearer ${token}`,
+      };
+      const [usersResponse, poiResponse, cashResponse] = await Promise.all([
+        fetch(USERS_URL, { headers }),
+        fetch(PENDING_POI_URL, { headers }),
+        fetch(PENDING_CASH_URL, { headers }),
+      ]);
+      const [users, poiRequests, cashPayments] = await Promise.all([
+        readResponse(usersResponse),
+        readResponse(poiResponse),
+        readResponse(cashResponse),
+      ]);
+
+      if (!Array.isArray(users) || !Array.isArray(poiRequests) || !Array.isArray(cashPayments)) {
+        throw new Error("Máy chủ trả về dữ liệu thống kê không hợp lệ.");
+      }
+
+      setOverviewCounts({
+        users: users.length,
+        poiRequests: poiRequests.length,
+        cashPayments: cashPayments.length,
+      });
+    } catch (err) {
+      setOverviewCountsError(err.message || "Không tải được số liệu tổng quan.");
+    } finally {
+      setOverviewCountsLoading(false);
+    }
+  }, [token]);
+
   useEffect(() => {
-    if (!token || currentPage !== "dashboard") return undefined;
+    if (!token || !["dashboard", "visits"].includes(currentPage)) return undefined;
     const initialTimerId = window.setTimeout(() => void loadActiveVisitors(), 0);
     const timerId = window.setInterval(
       loadActiveVisitors,
@@ -1281,6 +1329,12 @@ export default function AdminDashboard() {
       window.clearInterval(timerId);
     };
   }, [token, currentPage, loadActiveVisitors]);
+
+  useEffect(() => {
+    if (!token || currentPage !== "dashboard") return undefined;
+    const timerId = window.setTimeout(() => void loadOverviewCounts(), 0);
+    return () => window.clearTimeout(timerId);
+  }, [token, currentPage, loadOverviewCounts]);
 
   // Chỉ tải thống kê khi Admin đã đăng nhập
   useEffect(() => {
@@ -1358,7 +1412,7 @@ export default function AdminDashboard() {
             }
           >
             <span className="admin-nav-symbol">₫</span>
-            Thanh toán tiền mặt
+            Giao dịch thanh toán
           </NavLink>
 
           <NavLink
@@ -1381,10 +1435,13 @@ export default function AdminDashboard() {
             Quản lý thuyết minh
           </NavLink>
           <NavLink
-            to="/admin/staff"
-            className={({ isActive }) => (isActive ? "active" : "")}
+            to="/admin/users"
+            className={({ isActive }) =>
+              `admin-nav-item${isActive ? " active" : ""}`
+            }
           >
-            Quản lý nhân viên
+            <span className="admin-nav-symbol">♙</span>
+            Quản lý người dùng
           </NavLink>
         </nav>
 
@@ -1442,8 +1499,12 @@ export default function AdminDashboard() {
             <button
               className="admin-refresh"
               type="button"
-              onClick={loadStats}
-              disabled={loading}
+              onClick={() => {
+                void loadStats();
+                void loadOverviewCounts();
+                void loadActiveVisitors();
+              }}
+              disabled={loading || overviewCountsLoading}
             >
               <span
                 className={
@@ -1452,7 +1513,7 @@ export default function AdminDashboard() {
               >
                 ↻
               </span>
-              {loading ? "Đang tải..." : "Làm mới dữ liệu"}
+              {loading || overviewCountsLoading ? "Đang tải..." : "Làm mới dữ liệu"}
             </button>
           </section>
         )}
@@ -1462,6 +1523,15 @@ export default function AdminDashboard() {
             <strong>Thông báo thống kê</strong>
             <span>{error}</span>
             <button type="button" onClick={loadStats}>
+              Thử lại
+            </button>
+          </div>
+        )}
+        {currentPage === "dashboard" && overviewCountsError && (
+          <div className="admin-alert" role="alert">
+            <strong>Không tải được số liệu người dùng</strong>
+            <span>{overviewCountsError}</span>
+            <button type="button" onClick={() => void loadOverviewCounts()}>
               Thử lại
             </button>
           </div>
@@ -1519,17 +1589,97 @@ export default function AdminDashboard() {
               value={stats.totalIncome}
               hint={`${formatNumber(stats.paidTransactions)} giao dịch đã thanh toán · VNĐ`}
             />
+            <StatCard
+              icon="♙"
+              tone="blue"
+              label="Tổng số người dùng"
+              value={overviewCountsLoading ? "…" : formatNumber(overviewCounts.users)}
+              hint="Không tính tài khoản Admin"
+            />
+            <StatCard
+              icon="⌖"
+              tone="orange"
+              label="Yêu cầu duyệt POI"
+              value={overviewCountsLoading ? "…" : formatNumber(overviewCounts.poiRequests)}
+              hint="Hồ sơ đang chờ xử lý"
+            />
+            <StatCard
+              icon="₫"
+              tone="green"
+              label="Yêu cầu thanh toán tiền mặt"
+              value={overviewCountsLoading ? "…" : formatNumber(overviewCounts.cashPayments)}
+              hint="Giao dịch đang chờ xác nhận"
+            />
           </section>
         )}
         {currentPage === "visits" && (
-          <VisitorLog token={token} />
+          <>
+            <section className="admin-page-heading visits-page-heading">
+              <div>
+                <p className="admin-eyebrow">PHÂN TÍCH TRUY CẬP</p>
+                <h1>Thống kê truy cập</h1>
+                <p className="admin-subtitle">
+                  Theo dõi lượt truy cập, khách duy nhất và khách đang hoạt động.
+                </p>
+              </div>
+              <button
+                className="admin-refresh"
+                type="button"
+                onClick={() => {
+                  void loadStats();
+                  void loadActiveVisitors();
+                }}
+                disabled={loading}
+              >
+                {loading ? "Đang cập nhật..." : "Làm mới thống kê"}
+              </button>
+            </section>
+            <section className="admin-stats-grid visits-stats-grid" aria-label="Thống kê truy cập">
+              <StatCard
+                icon="↗"
+                tone="purple"
+                label="Tổng lượt truy cập"
+                value={stats.totalVisits}
+                hint="Tất cả lượt đã ghi nhận"
+              />
+              <StatCard
+                icon="◎"
+                tone="blue"
+                label="Khách truy cập duy nhất"
+                value={stats.uniqueVisitors}
+                hint="Tính theo mã khách truy cập"
+              />
+              <StatCard
+                icon="◷"
+                tone="orange"
+                label="Lượt truy cập hôm nay"
+                value={stats.visitsToday}
+                hint="Trong ngày hiện tại"
+              />
+              <StatCard
+                icon="♙"
+                tone="green"
+                label="Khách hôm nay"
+                value={stats.uniqueVisitorsToday}
+                hint="Khách riêng biệt hôm nay"
+              />
+              <StatCard
+                icon="●"
+                tone="green"
+                label="Khách đang hoạt động"
+                value={activeVisitors}
+                hint={activeVisitorsError ? "Không thể cập nhật" : "Cập nhật trực tiếp"}
+              />
+            </section>
+            <VisitorLog token={token} />
+          </>
         )}
 
         {currentPage === "visits" && <VisitorQrCard />}
 
         {currentPage === "payments" && <CashPaymentManager token={token} />}
 
-        {currentPage === "staff" && <StaffAccountManager token={token} />}
+        {currentPage === "users" && <UserAccountManager token={token} />}
 
         {/* Hai bảng tổng quan và trạng thái API */}
         {currentPage === "dashboard" && <section className="admin-content-grid">

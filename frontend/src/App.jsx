@@ -1,5 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { getContents, recordActivePresence, recordVisit } from "./services/contentService";
+import {
+  getContents,
+  recordActivePresence,
+  recordVisit,
+} from "./services/contentService";
 import AdminDashboard from "./pages/Admin/AdminDashboard";
 import { languages, messages, supportedLanguageCodes } from "./i18n";
 import StaffDashboard from "./pages/Staff/StaffDashboard.jsx";
@@ -198,16 +202,21 @@ function LanguageSelection({ onSelect }) {
           ))}
         </div>
         <p className="language-selection-footer">
-          Hệ thống thuyết minh tự động · Bán đảo Sơn Trà, Đà Nẵng
+          Hệ thống thuyết minh tự động ·
         </p>
         <p className="language-selection-privacy">
           Website chỉ lưu mã khách ngẫu nhiên, thời điểm truy cập và ngôn ngữ đã
           chọn để thống kê; không lưu tên, email hay mật khẩu.
         </p>
-        <nav className="language-selection-links" aria-label="Tài khoản và đăng ký địa điểm">
+        <nav
+          className="language-selection-links"
+          aria-label="Tài khoản và đăng ký địa điểm"
+        >
           <a href="/login?audience=user">Đăng nhập người dùng</a>
           <a href="/login?audience=staff">Đăng nhập nhân viên</a>
-          <a className="primary" href="/poi-owner/register">Đăng ký địa điểm</a>
+          <a className="primary" href="/poi-owner/register">
+            Đăng ký địa điểm
+          </a>
         </nav>
       </section>
     </main>
@@ -429,9 +438,11 @@ function MapApp({ language, onChangeLanguage, onOpenLanguageSelection }) {
     }
 
     if (!position) {
-      setRouteError(language === "vi"
-        ? "Hãy bật định vị để xem đường đi từ vị trí hiện tại."
-        : "Enable location to see a route from your current position.");
+      setRouteError(
+        language === "vi"
+          ? "Hãy bật định vị để xem đường đi từ vị trí hiện tại."
+          : "Enable location to see a route from your current position.",
+      );
       locateMe();
       return;
     }
@@ -441,20 +452,36 @@ function MapApp({ language, onChangeLanguage, onOpenLanguageSelection }) {
     setRouteLoading(true);
     const [fromLat, fromLng] = position;
     const [toLat, toLng] = selected.position;
-    fetch(`https://router.project-osrm.org/route/v1/driving/${fromLng},${fromLat};${toLng},${toLat}?overview=full&geometries=geojson`)
+    fetch(
+      `https://router.project-osrm.org/route/v1/driving/${fromLng},${fromLat};${toLng},${toLat}?overview=full&geometries=geojson`,
+    )
       .then(async (response) => {
         const data = await response.json();
         if (!response.ok || data.code !== "Ok" || !data.routes?.length) {
-          throw new Error(language === "vi" ? "Không tìm thấy tuyến đường." : "No route found.");
+          throw new Error(
+            language === "vi"
+              ? "Không tìm thấy tuyến đường."
+              : "No route found.",
+          );
         }
         const bestRoute = data.routes[0];
         setRoute({
-          coordinates: bestRoute.geometry.coordinates.map(([lng, lat]) => [lat, lng]),
+          coordinates: bestRoute.geometry.coordinates.map(([lng, lat]) => [
+            lat,
+            lng,
+          ]),
           distance: bestRoute.distance,
           duration: bestRoute.duration,
         });
       })
-      .catch((error) => setRouteError(error.message || (language === "vi" ? "Không thể tải tuyến đường." : "Could not load route.")))
+      .catch((error) =>
+        setRouteError(
+          error.message ||
+            (language === "vi"
+              ? "Không thể tải tuyến đường."
+              : "Could not load route."),
+        ),
+      )
       .finally(() => setRouteLoading(false));
   }
 
@@ -858,7 +885,11 @@ function MapApp({ language, onChangeLanguage, onOpenLanguageSelection }) {
                   />
                 )}
 
-                <MapController place={selected} userPosition={position} route={route} />
+                <MapController
+                  place={selected}
+                  userPosition={position}
+                  route={route}
+                />
               </MapContainer>
 
               <div className="map-label">
@@ -869,7 +900,9 @@ function MapApp({ language, onChangeLanguage, onOpenLanguageSelection }) {
               {(routeLoading || route || routeError) && (
                 <div className="map-route-status" role="status">
                   {routeLoading
-                    ? (language === "vi" ? "Đang tìm đường đi…" : "Finding route…")
+                    ? language === "vi"
+                      ? "Đang tìm đường đi…"
+                      : "Finding route…"
                     : route
                       ? `${language === "vi" ? "Tuyến đường" : "Route"}: ${(route.distance / 1000).toFixed(1)} km · ${Math.max(1, Math.round(route.duration / 60))} min`
                       : routeError}
@@ -922,8 +955,12 @@ function MapApp({ language, onChangeLanguage, onOpenLanguageSelection }) {
               >
                 <Navigation size={18} />
                 {routeLoading
-                  ? (language === "vi" ? "Đang tìm đường…" : "Finding route…")
-                  : (language === "vi" ? "Chỉ đường trên bản đồ" : "Show route on map")}
+                  ? language === "vi"
+                    ? "Đang tìm đường…"
+                    : "Finding route…"
+                  : language === "vi"
+                    ? "Chỉ đường trên bản đồ"
+                    : "Show route on map"}
               </button>
 
               <button

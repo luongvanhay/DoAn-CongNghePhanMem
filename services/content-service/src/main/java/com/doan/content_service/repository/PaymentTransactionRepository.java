@@ -16,6 +16,8 @@ public interface PaymentTransactionRepository
 
     List<PaymentTransaction> findByStatus(String status);
 
+    List<PaymentTransaction> findByMethodOrderByCreatedAtDesc(String method);
+
     Optional<PaymentTransaction> findFirstBySessionIdAndStatusAndAccessGranted(
             String sessionId, String status, boolean accessGranted);
 

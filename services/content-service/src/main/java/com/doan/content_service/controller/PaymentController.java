@@ -171,6 +171,27 @@ public class PaymentController {
                 .toList();
     }
 
+    @GetMapping("/vnpay")
+    public List<Map<String, Object>> getVnpayPayments() {
+        return paymentRepository
+                .findByMethodOrderByCreatedAtDesc("VNPAY")
+                .stream()
+                .map(transaction -> {
+                    Map<String, Object> payment = new HashMap<>();
+                    payment.put("transactionCode", transaction.getTransactionCode());
+                    payment.put("amount", transaction.getAmount());
+                    payment.put("status", transaction.getStatus());
+                    payment.put("language", transaction.getLanguage() == null
+                            ? "vi" : transaction.getLanguage());
+                    payment.put("createdAt", transaction.getCreatedAt() == null
+                            ? "" : transaction.getCreatedAt().toString());
+                    payment.put("paidAt", transaction.getPaidAt() == null
+                            ? "" : transaction.getPaidAt().toString());
+                    return payment;
+                })
+                .toList();
+    }
+
     @GetMapping("/vnpay/return")
     public ResponseEntity<Void> vnpayReturn(
             @RequestParam MultiValueMap<String, String> parameters) {

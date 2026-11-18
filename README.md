@@ -1,5 +1,41 @@
 # DoAn-CongNghePhanMem
 
+## Khởi chạy dự án trên máy mới
+
+Yêu cầu: Docker Desktop đang chạy và Node.js/npm đã được cài đặt.
+
+1. Tạo file cấu hình local từ mẫu. Đổi `ADMIN_PASSWORD` trong `.env` trước khi chạy:
+
+   ```powershell
+   Copy-Item .env.example .env
+   ```
+
+2. Khởi động backend và MongoDB:
+
+   ```powershell
+   docker compose up --build -d
+   ```
+
+   MongoDB sẽ nạp nội dung địa điểm, giao dịch mẫu và lượt truy cập mẫu từ
+   `database/seed` khi khởi tạo volume lần đầu. Docker giữ dữ liệu trong volume
+   `mongo_data` qua các lần khởi động sau. Tài khoản Admin đầu tiên lấy từ
+   `ADMIN_USERNAME` và `ADMIN_PASSWORD` trong `.env`.
+
+3. Mở terminal khác để chạy frontend:
+
+   ```powershell
+   cd frontend
+   npm install
+   npm run dev
+   ```
+
+   Mở `http://localhost:5173`. Các thành viên dùng chung nội dung khởi tạo,
+   nhưng dữ liệu phát sinh sau đó được lưu riêng trên máy mỗi người.
+
+Không commit `.env`, mật khẩu, khóa JWT, khóa tích hợp hoặc bản sao database có
+dữ liệu người dùng thật. Các giá trị trong `.env.example` chỉ dành cho phát triển
+cục bộ; không dùng cho môi trường công khai.
+
 ## Tạo tài khoản Admin lần đầu
 
 Auth service chỉ tạo Admin bootstrap khi được cung cấp `ADMIN_USERNAME` và
