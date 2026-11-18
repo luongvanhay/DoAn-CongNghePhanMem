@@ -106,3 +106,25 @@ phát triển cho môi trường production.
   `docker compose up -d --build translation-service`. Không chia sẻ hoặc commit key.
   Dịch tự động có thể thất bại nếu nhà cung cấp không khả dụng hoặc không hỗ
   trợ cặp ngôn ngữ; khi đó trang sẽ báo lỗi và có thể chọn Tiếng Việt.
+
+## Chatbot RAG
+
+Chatbot tìm nội dung POI đang hoạt động trong `content_db.contents`. Không cần
+API key: khi `CHAT_API_KEY` để trống, chatbot trả trực tiếp nội dung POI phù hợp
+tìm được trong database, không gửi dữ liệu ra dịch vụ bên ngoài. Chế độ này không
+tự diễn đạt lại hoặc dịch nội dung. Địa điểm đang chọn chỉ là gợi ý truy xuất;
+câu hỏi vẫn phải khớp dữ liệu để chatbot sử dụng nội dung đó.
+
+Muốn chatbot tạo câu trả lời tự nhiên hơn, cấu hình `CHAT_API_URL`, `CHAT_MODEL`
+và `CHAT_API_KEY` của nhà cung cấp tương thích OpenAI trong `.env`; giá trị mẫu
+có trong `.env.example`. Khi dùng nhà cung cấp, câu hỏi và các đoạn POI liên quan
+sẽ được gửi tới dịch vụ đó. Không đưa API key vào frontend hoặc commit key. Nếu
+không tìm thấy POI phù hợp, chatbot thông báo chưa có thông tin chính thức và gợi
+ý hỏi nhân viên tại chùa. Nếu nhà cung cấp không phản hồi trong 15 giây, chatbot
+báo dịch vụ tạm thời không khả dụng và đề nghị khách thử lại sau ít phút.
+
+Sau khi cập nhật cấu hình hoặc mã backend, build lại content-service:
+
+```powershell
+docker compose up -d --build content-service
+```

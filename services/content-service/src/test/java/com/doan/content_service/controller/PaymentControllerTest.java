@@ -1,6 +1,9 @@
 package com.doan.content_service.controller;
 
+import com.doan.content_service.model.PaymentTransaction;
 import com.doan.content_service.repository.PaymentTransactionRepository;
+import com.doan.content_service.service.VnpayService;
+import jakarta.servlet.http.HttpServletRequest;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -18,7 +21,9 @@ import java.util.TreeMap;
 import java.util.stream.Collectors;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 class PaymentControllerTest {
 
@@ -26,18 +31,31 @@ class PaymentControllerTest {
 
     @Test
     void createsVnpayPaymentUrlWithAvailableMethodsAndMatchingSignature() throws GeneralSecurityException {
-        PaymentController controller = new PaymentController(mock(PaymentTransactionRepository.class));
-        ReflectionTestUtils.setField(controller, "vnpPayUrl", "https://sandbox.vnpayment.vn/paymentv2/vpcpay.html");
-        ReflectionTestUtils.setField(controller, "vnpTmnCode", "TESTCODE");
-        ReflectionTestUtils.setField(controller, "vnpHashSecret", TEST_HASH_SECRET);
-        ReflectionTestUtils.setField(controller, "vnpReturnUrl", "http://localhost:3001/payments/vnpay-return");
-        ReflectionTestUtils.setField(controller, "vnpFrontendReturnUrl", "http://localhost:5173/payment-result");
+        PaymentTransactionRepository repository = mock(PaymentTransactionRepository.class);
+        when(repository.save(any(PaymentTransaction.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        VnpayService vnpayService = new VnpayService();
+        ReflectionTestUtils.setField(
+                vnpayService, "paymentUrl",
+                "https://sandbox.vnpayment.vn/paymentv2/vpcpay.html");
+        ReflectionTestUtils.setField(vnpayService, "tmnCode", "TESTCODE");
+        ReflectionTestUtils.setField(vnpayService, "hashSecret", TEST_HASH_SECRET);
+        ReflectionTestUtils.setField(
+                vnpayService, "returnUrl",
+                "http://localhost:3000/payments/vnpay/return");
+
+        PaymentController controller = new PaymentController(repository, vnpayService);
+        ReflectionTestUtils.setField(
+                controller, "frontendReturnUrl", "http://localhost:5173/payment");
+        HttpServletRequest httpRequest = mock(HttpServletRequest.class);
+        when(httpRequest.getRemoteAddr()).thenReturn("127.0.0.1");
 
         PaymentController.CreatePaymentRequest request = new PaymentController.CreatePaymentRequest();
         request.setAmount(50_000L);
         request.setMethod("VNPAY");
 
-        ResponseEntity<?> response = controller.createPayment(request);
+        ResponseEntity<?> response = controller.createPayment(request, httpRequest);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CREATED);
         Map<?, ?> body = (Map<?, ?>) response.getBody();

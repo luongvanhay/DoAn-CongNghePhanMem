@@ -7,6 +7,7 @@ import {
 import AdminDashboard from "./pages/Admin/AdminDashboard";
 import { languages, messages, supportedLanguageCodes } from "./i18n";
 import StaffDashboard from "./pages/Staff/StaffDashboard.jsx";
+import { resolveImageUrl } from "./utils/imageUrl.js";
 
 import {
   MapContainer,
@@ -252,7 +253,8 @@ function MapApp({ language, onChangeLanguage, onOpenLanguageSelection }) {
   const [gpsMessage, setGpsMessage] = useState("");
   const [chatOpen, setChatOpen] = useState(false);
   const [question, setQuestion] = useState("");
-  const [answer, setAnswer] = useState("");
+  const [chatMessages, setChatMessages] = useState([]);
+  const [chatLoading, setChatLoading] = useState(false);
   const [audioPlayback, setAudioPlayback] = useState({
     status: "idle",
     placeId: null,
@@ -269,11 +271,19 @@ function MapApp({ language, onChangeLanguage, onOpenLanguageSelection }) {
     playbackMatchesSelection && audioPlayback.status === "loading";
   const audioRef = useRef(null);
   const audioRequestRef = useRef(null);
+  const chatEndRef = useRef(null);
+  const chatMessageSequenceRef = useRef(0);
   const [loading, setLoading] = useState(true);
   const [apiError, setApiError] = useState("");
   const [reloadKey, setReloadKey] = useState(0);
 
   const mapCenter = selected?.position || position || DEFAULT_POSITION;
+
+  useEffect(() => {
+    if (chatOpen) {
+      chatEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+    }
+  }, [chatMessages, chatLoading, chatOpen]);
 
   // Tải POI từ backend.
   useEffect(() => {
@@ -597,22 +607,64 @@ function MapApp({ language, onChangeLanguage, onOpenLanguageSelection }) {
     playNarration();
   }
 
-  function askQuestion(event) {
+  function addChatMessage(message) {
+    const id = chatMessageSequenceRef.current;
+    chatMessageSequenceRef.current += 1;
+    setChatMessages((messages) => [...messages, { ...message, id }]);
+  }
+
+  async function askQuestion(event) {
     event.preventDefault();
 
-    if (!question.trim()) {
+    const submittedQuestion = question.trim();
+    if (!submittedQuestion || chatLoading) {
       return;
     }
 
-    if (!selected) {
-      setAnswer(text.noPlaces);
-      setQuestion("");
-      return;
-    }
-
-    setAnswer(`${selected.name}. ${text.fromBackend}`);
-
+    addChatMessage({ role: "user", content: submittedQuestion });
     setQuestion("");
+    setChatLoading(true);
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(() => controller.abort(), 20000);
+
+    try {
+      const response = await fetch("/api/content/chat/ask", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        signal: controller.signal,
+        body: JSON.stringify({
+          question: submittedQuestion,
+          language,
+          placeId: selected?.id || null,
+        }),
+      });
+      const data = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        throw new Error(
+          data.detail || data.message || "Không thể lấy câu trả lời từ chatbot.",
+        );
+      }
+
+      if (typeof data.answer !== "string" || !data.answer.trim()) {
+        throw new Error("Chatbot không trả về nội dung câu trả lời.");
+      }
+
+      addChatMessage({
+        role: "assistant",
+        content: data.answer.trim(),
+        sources: Array.isArray(data.sources) ? data.sources : [],
+      });
+    } catch (error) {
+      const message =
+        error.name === "AbortError"
+          ? text.chatTimeout
+          : error.message || "Không thể kết nối tới chatbot.";
+      addChatMessage({ role: "assistant", content: message, isError: true });
+    } finally {
+      window.clearTimeout(timeoutId);
+      setChatLoading(false);
+    }
   }
 
   return (
@@ -924,7 +976,7 @@ function MapApp({ language, onChangeLanguage, onOpenLanguageSelection }) {
           <div className="detail-image">
             <img
               className="detail-image-photo"
-              src={selected?.imageUrl || "/Chùa-Linh-Ứng-Bãi-Bụt1.jpg"}
+              src={resolveImageUrl(selected?.imageUrl) || "/Chùa-Linh-Ứng-Bãi-Bụt1.jpg"}
               alt={selected?.name || text.category}
               onError={(event) => {
                 event.currentTarget.style.display = "none";
@@ -1031,7 +1083,35 @@ function MapApp({ language, onChangeLanguage, onOpenLanguageSelection }) {
               {text.chatGreeting} {selected?.name || text.category}?
             </p>
 
-            {answer && <p className="chat-bubble">{answer}</p>}
+            {chatMessages.map((message) => (
+              <div
+                className={`chat-message ${
+                  message.role === "user" ? "chat-message-user" : ""
+                }`}
+                key={message.id}
+              >
+                <p
+                  className={`chat-bubble ${
+                    message.role === "user" ? "chat-bubble-user" : ""
+                  } ${message.isError ? "chat-error" : ""}`}
+                  role={message.isError ? "alert" : undefined}
+                  aria-live={message.role === "assistant" ? "polite" : undefined}
+                >
+                  {message.content}
+                </p>
+                {message.sources?.length > 0 && (
+                  <p className="chat-sources">
+                    {text.chatSource}: {message.sources.join(", ")}
+                  </p>
+                )}
+              </div>
+            ))}
+            {chatLoading && (
+              <p className="chat-bubble" role="status">
+                {text.chatLoading}
+              </p>
+            )}
+            <div ref={chatEndRef} aria-hidden="true" />
           </div>
 
           <form className="chat-form" onSubmit={askQuestion}>
@@ -1040,9 +1120,12 @@ function MapApp({ language, onChangeLanguage, onOpenLanguageSelection }) {
               onChange={(event) => setQuestion(event.target.value)}
               placeholder={text.chatPlaceholder}
               aria-label={text.chatPlaceholder}
+              disabled={chatLoading}
             />
 
-            <button type="submit">{text.send}</button>
+            <button type="submit" disabled={chatLoading || !question.trim()}>
+              {text.send}
+            </button>
           </form>
         </section>
       )}

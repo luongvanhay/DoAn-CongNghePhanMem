@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { resolveImageUrl } from "../../utils/imageUrl.js";
 import {
   MapPin,
   Plus,
@@ -427,7 +428,7 @@ export default function PoiOwnerDashboard() {
                   {place.imageUrl ? (
                     <img
                       className="owner-place-image"
-                      src={place.imageUrl}
+                      src={resolveImageUrl(place.imageUrl)}
                       alt={place.title}
                       onError={(event) => {
                         event.currentTarget.style.display = "none";

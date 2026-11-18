@@ -850,12 +850,41 @@
 .chat-bubble {
   width: fit-content;
   max-width: 95%;
+  margin: 0 0 8px;
   padding: 12px;
   border-radius: 4px 12px 12px;
   background: #edf3e9;
   color: #425546;
   font-size: 11px;
   line-height: 1.8;
+}
+
+.chat-message {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  margin-bottom: 8px;
+}
+
+.chat-message-user {
+  align-items: flex-end;
+}
+
+.chat-bubble-user {
+  border-radius: 12px 4px 12px 12px;
+  background: #dcebdd;
+}
+
+.chat-error {
+  background: #fff0ef;
+  color: #9c2f28;
+}
+
+.chat-sources {
+  margin: 0 0 4px;
+  color: #68786b;
+  font-size: 10px;
+  line-height: 1.5;
 }
 
 .chat-form {
