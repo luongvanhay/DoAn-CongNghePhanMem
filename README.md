@@ -118,20 +118,12 @@ câu hỏi vẫn phải khớp dữ liệu để chatbot sử dụng nội dung 
 Muốn chatbot tạo câu trả lời tự nhiên hơn, cấu hình `CHAT_API_URL`, `CHAT_MODEL`
 và `CHAT_API_KEY` của nhà cung cấp tương thích OpenAI trong `.env`; giá trị mẫu
 có trong `.env.example`. Khi dùng nhà cung cấp, câu hỏi và các đoạn POI liên quan
-<<<<<<< Updated upstream
 sẽ được gửi tới dịch vụ đó. Không đưa API key vào frontend hoặc commit key. Nếu
 không tìm thấy POI phù hợp, chatbot thông báo chưa có thông tin chính thức và gợi
 ý hỏi nhân viên tại chùa. Nếu nhà cung cấp không phản hồi trong 15 giây, chatbot
 báo dịch vụ tạm thời không khả dụng và đề nghị khách thử lại sau ít phút.
 
 Sau khi cập nhật cấu hình hoặc mã backend, build lại content-service:
-=======
-sẽ được gửi tới dịch vụ đó. Không đưa API key vào frontend hoặc commit key. Sau
-khi cập nhật cấu hình, build lại content-service. Nếu không tìm thấy POI phù hợp,
-chatbot thông báo chưa có thông tin chính thức và gợi ý hỏi nhân viên tại chùa.
-Nếu nhà cung cấp không phản hồi trong 15 giây, chatbot báo dịch vụ tạm thời không
-khả dụng và đề nghị khách thử lại sau ít phút:
->>>>>>> Stashed changes
 
 ```powershell
 docker compose up -d --build content-service

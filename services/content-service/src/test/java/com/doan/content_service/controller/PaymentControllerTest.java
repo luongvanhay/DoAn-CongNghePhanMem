@@ -31,18 +31,12 @@ class PaymentControllerTest {
 
     @Test
     void createsVnpayPaymentUrlWithAvailableMethodsAndMatchingSignature() throws GeneralSecurityException {
-<<<<<<< Updated upstream
         PaymentTransactionRepository repository = mock(PaymentTransactionRepository.class);
         when(repository.save(any(PaymentTransaction.class)))
-=======
-        PaymentTransactionRepository paymentRepository = mock(PaymentTransactionRepository.class);
-        when(paymentRepository.save(any(PaymentTransaction.class)))
->>>>>>> Stashed changes
                 .thenAnswer(invocation -> invocation.getArgument(0));
 
         VnpayService vnpayService = new VnpayService();
         ReflectionTestUtils.setField(
-<<<<<<< Updated upstream
                 vnpayService, "paymentUrl",
                 "https://sandbox.vnpayment.vn/paymentv2/vpcpay.html");
         ReflectionTestUtils.setField(vnpayService, "tmnCode", "TESTCODE");
@@ -54,15 +48,6 @@ class PaymentControllerTest {
         PaymentController controller = new PaymentController(repository, vnpayService);
         ReflectionTestUtils.setField(
                 controller, "frontendReturnUrl", "http://localhost:5173/payment");
-=======
-                vnpayService, "paymentUrl", "https://sandbox.vnpayment.vn/paymentv2/vpcpay.html");
-        ReflectionTestUtils.setField(vnpayService, "tmnCode", "TESTCODE");
-        ReflectionTestUtils.setField(vnpayService, "hashSecret", TEST_HASH_SECRET);
-        ReflectionTestUtils.setField(
-                vnpayService, "returnUrl", "http://localhost:3001/payments/vnpay-return");
-
-        PaymentController controller = new PaymentController(paymentRepository, vnpayService);
->>>>>>> Stashed changes
         HttpServletRequest httpRequest = mock(HttpServletRequest.class);
         when(httpRequest.getRemoteAddr()).thenReturn("127.0.0.1");
 

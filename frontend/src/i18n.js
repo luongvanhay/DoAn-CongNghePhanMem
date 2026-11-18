@@ -58,12 +58,9 @@ const vi = {
   currentPosition: "Vị trí hiện tại của bạn",
   chatbot: "Hướng dẫn viên",
   chatbotDemo: "Trả lời dựa trên dữ liệu địa điểm",
-<<<<<<< Updated upstream
   chatLoading: "Đang tìm câu trả lời...",
   chatTimeout: "Dịch vụ chatbot tạm thời không phản hồi. Vui lòng thử lại sau ít phút.",
   chatSource: "Nguồn",
-=======
->>>>>>> Stashed changes
   chatGreeting: "Xin chào! Bạn muốn tìm hiểu điều gì về",
   chatPlaceholder: "Nhập câu hỏi...",
   send: "Gửi",
@@ -96,11 +93,7 @@ const en = {
   fallback: "No narration available.", narrationError: "Could not play the narration. Please try again.",
   translationError: "Could not translate this content. Check the Translation Service or try again later.",
   mapLabel: "Son Tra Peninsula · Da Nang", currentPosition: "Your current location",
-<<<<<<< Updated upstream
   chatbot: "Tour guide", chatbotDemo: "Answers based on place data", chatGreeting: "Hello! What would you like to know about",
-=======
-  chatbot: "Tour guide", chatbotDemo: "Answers grounded in place data", chatGreeting: "Hello! What would you like to know about",
->>>>>>> Stashed changes
   chatPlaceholder: "Type a question...", send: "Send", footer: "Software Engineering Project · Web demo",
   chatLoading: "Finding an answer...", chatTimeout: "The chatbot is temporarily unavailable. Please try again in a few minutes.", chatSource: "Source",
   chooseTitle: "Choose your language", chooseDescription: "Select a language to begin your visit.",
@@ -125,11 +118,7 @@ const zh = {
   fallback: "暂无讲解内容。", narrationError: "无法播放讲解音频，请重试。",
   translationError: "无法翻译内容。请检查翻译服务或稍后重试。",
   mapLabel: "山茶半岛 · 岘港", currentPosition: "您的当前位置",
-<<<<<<< Updated upstream
   chatbot: "智能导览", chatbotDemo: "根据景点资料回答", chatGreeting: "您好！您想了解什么？",
-=======
-  chatbot: "智能导览", chatbotDemo: "基于景点资料回答", chatGreeting: "您好！您想了解什么？",
->>>>>>> Stashed changes
   chatPlaceholder: "输入问题...", send: "发送", footer: "软件工程项目 · 网页演示",
   chatLoading: "正在查找答案...", chatTimeout: "聊天服务暂时无响应，请几分钟后重试。", chatSource: "来源",
   chooseTitle: "选择语言", chooseDescription: "请选择语言开始游览。",
@@ -153,11 +142,7 @@ const ko = {
   fallback: "해설 내용이 없습니다.", narrationError: "해설을 재생할 수 없습니다. 다시 시도하세요.",
   translationError: "번역할 수 없습니다. 번역 서비스를 확인하거나 나중에 다시 시도하세요.",
   mapLabel: "선짜 반도 · 다낭", currentPosition: "현재 위치",
-<<<<<<< Updated upstream
   chatbot: "AI 가이드", chatbotDemo: "장소 정보에 근거한 답변", chatGreeting: "안녕하세요! 무엇을 알고 싶으신가요?",
-=======
-  chatbot: "AI 가이드", chatbotDemo: "장소 데이터 기반 답변", chatGreeting: "안녕하세요! 무엇을 알고 싶으신가요?",
->>>>>>> Stashed changes
   chatPlaceholder: "질문 입력...", send: "보내기", footer: "소프트웨어 공학 프로젝트 · 웹 데모",
   chatLoading: "답변을 찾는 중...", chatTimeout: "챗봇 서비스가 일시적으로 응답하지 않습니다. 몇 분 후 다시 시도해 주세요.", chatSource: "출처",
   chooseTitle: "언어 선택", chooseDescription: "방문을 시작할 언어를 선택하세요.",
@@ -181,11 +166,7 @@ const ja = {
   fallback: "説明はありません。", narrationError: "音声を再生できません。もう一度お試しください。",
   translationError: "翻訳できません。翻訳サービスを確認するか、しばらくしてから再試行してください。",
   mapLabel: "ソンチャ半島 · ダナン", currentPosition: "現在地",
-<<<<<<< Updated upstream
   chatbot: "AIガイド", chatbotDemo: "場所の情報に基づく回答", chatGreeting: "こんにちは！何について知りたいですか？",
-=======
-  chatbot: "AIガイド", chatbotDemo: "スポット情報に基づく回答", chatGreeting: "こんにちは！何について知りたいですか？",
->>>>>>> Stashed changes
   chatPlaceholder: "質問を入力...", send: "送信", footer: "ソフトウェア工学プロジェクト · ウェブデモ",
   chatLoading: "回答を検索しています...", chatTimeout: "チャットサービスが一時的に応答していません。数分後にもう一度お試しください。", chatSource: "出典",
   chooseTitle: "言語を選択", chooseDescription: "見学を始める言語を選択してください。",

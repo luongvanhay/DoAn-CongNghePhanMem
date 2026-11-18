@@ -18,11 +18,7 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.text.Normalizer;
 import java.time.Duration;
-<<<<<<< Updated upstream
 import java.util.ArrayList;
-=======
-import java.util.Comparator;
->>>>>>> Stashed changes
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
@@ -108,33 +104,19 @@ public class RagChatService {
                                             "content", systemPrompt(language)),
                                     Map.of(
                                             "role", "user",
-<<<<<<< Updated upstream
                                             "content", userPrompt(
                                                     question, context, language)))))
-=======
-                                            "content", userPrompt(question, context, language)))))
->>>>>>> Stashed changes
                     .retrieve()
                     .body(Object.class);
         } catch (RestClientResponseException exception) {
             throw new ResponseStatusException(
                     HttpStatus.BAD_GATEWAY,
-<<<<<<< Updated upstream
                     "Chat API trả về HTTP " + exception.getStatusCode().value(),
-=======
-                    "Chat API trả về HTTP "
-                            + exception.getStatusCode().value(),
->>>>>>> Stashed changes
                     exception);
         } catch (ResourceAccessException exception) {
             throw new ResponseStatusException(
                     HttpStatus.GATEWAY_TIMEOUT,
-<<<<<<< Updated upstream
                     serviceUnavailableMessage(language),
-=======
-                    "Dịch vụ chatbot tạm thời không phản hồi. "
-                            + "Vui lòng thử lại sau ít phút.",
->>>>>>> Stashed changes
                     exception);
         }
 
@@ -161,12 +143,8 @@ public class RagChatService {
     private String formatLocalAnswer(Content content, String language) {
         String title = displayTitle(content, language).trim();
         String location = orEmpty(content.getLocation()).trim();
-<<<<<<< Updated upstream
         String description = truncate(
                 description(content, language).trim(), MAX_FIELD_LENGTH);
-=======
-        String description = truncate(description(content, language).trim(), MAX_FIELD_LENGTH);
->>>>>>> Stashed changes
         StringBuilder answer = new StringBuilder(title);
         if (!location.isBlank()) {
             if (answer.length() > 0) {
@@ -213,7 +191,6 @@ public class RagChatService {
             return List.of();
         }
 
-<<<<<<< Updated upstream
         List<ScoredContent> scoredContent = new ArrayList<>();
         for (Content content : activeContent) {
             int score = score(content, queryTerms, ignoreDiacritics)
@@ -233,20 +210,6 @@ public class RagChatService {
             matches.add(scoredContent.get(index).content());
         }
         return matches;
-=======
-        return activeContent.stream()
-                .map(content -> new ScoredContent(
-                        content,
-                        score(content, queryTerms, ignoreDiacritics)
-                                + selectedPlaceBoost(content, placeId)))
-                .filter(scored -> scored.score() > 0)
-                .filter(scored -> hasSufficientOverlap(
-                        scored.content(), queryTerms, ignoreDiacritics))
-                .sorted(Comparator.comparingInt(ScoredContent::score).reversed())
-                .limit(MAX_CONTEXTS)
-                .map(ScoredContent::content)
-                .toList();
->>>>>>> Stashed changes
     }
 
     private int selectedPlaceBoost(Content content, String placeId) {
@@ -341,20 +304,10 @@ public class RagChatService {
     }
 
     private String formatContent(Content content, String language) {
-<<<<<<< Updated upstream
         return "Place: " + displayTitle(content, language)
                 + "\nLocation: " + orEmpty(content.getLocation())
                 + "\nInformation: "
                 + truncate(description(content, language), MAX_FIELD_LENGTH);
-=======
-        StringBuilder text = new StringBuilder()
-                .append("Place: ").append(displayTitle(content, language))
-                .append("\nLocation: ").append(orEmpty(content.getLocation()));
-
-        text.append("\nInformation: ")
-                .append(truncate(description(content, language), MAX_FIELD_LENGTH));
-        return text.toString();
->>>>>>> Stashed changes
     }
 
     private String description(Content content, String language) {
@@ -434,7 +387,6 @@ public class RagChatService {
         };
     }
 
-<<<<<<< Updated upstream
     private String serviceUnavailableMessage(String language) {
         return switch (language) {
             case "en" -> "The chatbot service is temporarily unavailable. "
@@ -467,8 +419,6 @@ public class RagChatService {
         };
     }
 
-=======
->>>>>>> Stashed changes
     private static RestClient createRestClient() {
         SimpleClientHttpRequestFactory requestFactory =
                 new SimpleClientHttpRequestFactory();
