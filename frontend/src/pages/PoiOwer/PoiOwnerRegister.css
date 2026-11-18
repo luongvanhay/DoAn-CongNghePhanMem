@@ -1,0 +1,267 @@
+.poi-register-page {
+  min-height: 100vh;
+  padding: 40px 16px;
+  background: #f3f6fb;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  color: #1e293b;
+}
+
+.poi-register-card {
+  width: 100%;
+  max-width: 820px;
+  padding: 36px;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 18px;
+  box-shadow: 0 12px 35px rgba(15, 23, 42, 0.07);
+}
+
+.poi-register-header {
+  margin-bottom: 28px;
+}
+
+.poi-register-eyebrow {
+  margin: 0 0 10px;
+  color: #2563eb;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 1.2px;
+}
+
+.poi-register-header h1,
+.poi-register-success h1 {
+  margin: 0 0 12px;
+  font-size: clamp(25px, 4vw, 34px);
+  line-height: 1.25;
+}
+
+.poi-register-header > p:last-child {
+  color: #64748b;
+  line-height: 1.7;
+}
+
+.poi-register-form h2 {
+  margin: 28px 0 16px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid #e2e8f0;
+  font-size: 17px;
+}
+
+.poi-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+}
+
+.poi-field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 18px;
+  color: #334155;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.poi-field > span,
+.poi-required-note span {
+  color: #dc2626;
+}
+
+.poi-field input,
+.poi-field textarea {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 12px 14px;
+  border: 1px solid #cbd5e1;
+  border-radius: 9px;
+  background: #fff;
+  color: #0f172a;
+  font: inherit;
+  font-weight: 400;
+  outline: none;
+  transition:
+    border-color 0.2s,
+    box-shadow 0.2s;
+}
+
+.poi-field input:focus,
+.poi-field textarea:focus {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+}
+
+.poi-field input::placeholder,
+.poi-field textarea::placeholder {
+  color: #94a3b8;
+}
+
+.poi-field textarea {
+  resize: vertical;
+}
+
+.poi-register-error {
+  margin-bottom: 20px;
+  padding: 13px 15px;
+  border: 1px solid #fecaca;
+  border-radius: 9px;
+  background: #fef2f2;
+  color: #b91c1c;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.poi-required-note {
+  color: #64748b;
+  font-size: 13px;
+}
+
+.poi-button {
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 44px;
+  padding: 11px 18px;
+  border: 0;
+  border-radius: 9px;
+  font: inherit;
+  font-weight: 700;
+  text-decoration: none;
+  cursor: pointer;
+  transition:
+    background 0.2s,
+    transform 0.2s;
+}
+
+.poi-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
+}
+
+.poi-button-primary {
+  background: #2563eb;
+  color: #fff;
+}
+
+.poi-button-primary:hover:not(:disabled) {
+  background: #1d4ed8;
+}
+
+.poi-button-secondary {
+  border: 1px solid #cbd5e1;
+  background: #fff;
+  color: #334155;
+}
+
+.poi-submit-button {
+  width: 100%;
+  margin-top: 10px;
+}
+
+.poi-register-footer {
+  margin-top: 26px;
+  padding-top: 20px;
+  border-top: 1px solid #e2e8f0;
+  color: #64748b;
+  text-align: center;
+  font-size: 14px;
+  line-height: 1.8;
+}
+
+.poi-register-footer a {
+  color: #2563eb;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.poi-register-footer a:hover {
+  text-decoration: underline;
+}
+
+.poi-register-success {
+  max-width: 620px;
+  margin-top: 50px;
+  text-align: center;
+}
+
+.poi-success-icon {
+  display: grid;
+  width: 64px;
+  height: 64px;
+  margin: 0 auto 20px;
+  place-items: center;
+  border-radius: 50%;
+  background: #dcfce7;
+  color: #15803d;
+  font-size: 34px;
+  font-weight: 700;
+}
+
+.poi-register-success > p {
+  color: #64748b;
+  line-height: 1.7;
+}
+
+.poi-status {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 24px 0;
+  padding: 18px;
+  border: 1px solid #fde68a;
+  border-radius: 12px;
+  background: #fffbeb;
+}
+
+.poi-status span {
+  color: #92400e;
+  font-size: 13px;
+}
+
+.poi-status strong {
+  color: #b45309;
+}
+
+.poi-application-id {
+  overflow-wrap: anywhere;
+  font-size: 13px;
+}
+
+.poi-register-note {
+  font-size: 14px;
+}
+
+.poi-register-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 12px;
+  margin-top: 24px;
+}
+
+@media (max-width: 600px) {
+  .poi-register-page {
+    padding: 16px 10px;
+  }
+
+  .poi-register-card {
+    padding: 22px 17px;
+    border-radius: 13px;
+  }
+
+  .poi-form-grid {
+    grid-template-columns: 1fr;
+    gap: 0;
+  }
+
+  .poi-register-actions {
+    flex-direction: column;
+  }
+
+  .poi-register-actions .poi-button {
+    width: 100%;
+    box-sizing: border-box;
+  }
+}

@@ -10,7 +10,10 @@ import com.doan.auth_service.repository.UserRepository;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
 import java.time.Instant;
+import java.util.List;
 
 @Service
 public class PoiOwnerApplicationService {
@@ -28,6 +31,8 @@ public class PoiOwnerApplicationService {
         this.passwordEncoder = passwordEncoder;
     }
 
+    // Người dùng đăng ký POI, hồ sơ ở trạng thái PENDING
+    @Transactional
     public PoiOwnerApplication register(
             PoiOwnerApplicationRequest request) {
 
@@ -40,11 +45,11 @@ public class PoiOwnerApplicationService {
                     "Username đã tồn tại");
         }
 
-       User user = new User(
-        username,
-        passwordEncoder.encode(request.getPassword()),
-        User.Role.PROVIDER
-);
+        User user = new User(
+                username,
+                passwordEncoder.encode(request.getPassword()),
+                User.Role.PROVIDER
+        );
 
         user.setPoiOwnerVerified(false);
 
@@ -75,65 +80,72 @@ public class PoiOwnerApplicationService {
         }
     }
 
-    public java.util.List<PoiOwnerApplication> getPendingApplications() {
-    return applicationRepository.findByStatus(
-            PoiOwnerApplication.ApplicationStatus.PENDING
-    );
-}
-public PoiOwnerApplication review(
-        String applicationId,
-        boolean approved,
-        String rejectionReason,
-        String adminId) {
-
-    PoiOwnerApplication application =
-            applicationRepository.findById(applicationId)
-                    .orElseThrow(() ->
-                            new IllegalArgumentException(
-                                    "Không tìm thấy hồ sơ"));
-
-    if (application.getStatus()
-            != PoiOwnerApplication.ApplicationStatus.PENDING) {
-        throw new IllegalArgumentException(
-                "Hồ sơ này đã được xử lý");
+    // Admin lấy danh sách hồ sơ chờ duyệt
+    public List<PoiOwnerApplication> getPendingApplications() {
+        return applicationRepository.findByStatus(
+                PoiOwnerApplication.ApplicationStatus.PENDING);
     }
 
-    if (!approved
-            && (rejectionReason == null
+    public List<PoiOwnerApplication> getApprovedApplications() {
+        return applicationRepository.findByStatus(
+                PoiOwnerApplication.ApplicationStatus.APPROVED);
+    }
+
+    // Admin duyệt hoặc từ chối hồ sơ
+    @Transactional
+    public PoiOwnerApplication review(
+            String applicationId,
+            boolean approved,
+            String rejectionReason,
+            String adminId) {
+
+        PoiOwnerApplication application =
+                applicationRepository.findById(applicationId)
+                        .orElseThrow(() ->
+                                new IllegalArgumentException(
+                                        "Không tìm thấy hồ sơ"));
+
+        if (application.getStatus()
+                != PoiOwnerApplication.ApplicationStatus.PENDING) {
+            throw new IllegalArgumentException(
+                    "Hồ sơ này đã được xử lý");
+        }
+
+        if (!approved
+                && (rejectionReason == null
                 || rejectionReason.isBlank())) {
-        throw new IllegalArgumentException(
-                "Vui lòng nhập lý do từ chối");
+            throw new IllegalArgumentException(
+                    "Vui lòng nhập lý do từ chối");
+        }
+
+        User user = userRepository.findById(application.getUserId())
+                .orElseThrow(() ->
+                        new IllegalArgumentException(
+                                "Không tìm thấy tài khoản của hồ sơ"));
+
+        if (user.getRole() != User.Role.PROVIDER) {
+            throw new IllegalArgumentException(
+                    "Tài khoản không có vai trò PROVIDER");
+        }
+
+        application.setStatus(
+                approved
+                        ? PoiOwnerApplication.ApplicationStatus.APPROVED
+                        : PoiOwnerApplication.ApplicationStatus.REJECTED
+        );
+
+        application.setReviewedAt(Instant.now());
+        application.setReviewedBy(adminId);
+        application.setRejectionReason(
+                approved ? null : rejectionReason.trim()
+        );
+
+        user.setPoiOwnerVerified(approved);
+
+        userRepository.save(user);
+
+        return applicationRepository.save(application);
     }
-
-    User user = userRepository.findById(application.getUserId())
-            .orElseThrow(() ->
-                    new IllegalArgumentException(
-                            "Không tìm thấy tài khoản của hồ sơ"));
-
-    if (user.getRole() != User.Role.PROVIDER) {
-    throw new IllegalArgumentException(
-            "Tài khoản không có vai trò PROVIDER");
-}
-
-    application.setStatus(
-            approved
-                    ? PoiOwnerApplication.ApplicationStatus.APPROVED
-                    : PoiOwnerApplication.ApplicationStatus.REJECTED
-    );
-
-    application.setReviewedAt(Instant.now());
-    application.setReviewedBy(adminId);
-    application.setRejectionReason(
-            approved ? null : rejectionReason.trim()
-    );
-
-    user.setPoiOwnerVerified(approved);
-
-    userRepository.save(user);
-
-    return applicationRepository.save(application);
-}
-
 
     private void validate(PoiOwnerApplicationRequest request) {
         if (request == null) {

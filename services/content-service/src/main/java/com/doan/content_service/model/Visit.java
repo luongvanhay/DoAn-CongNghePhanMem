@@ -19,7 +19,16 @@ public class Visit {
     private String visitorId;
 
     @Indexed
+    private String sessionId;
+
+    private String source;
+
+    private String language;
+
+    @Indexed
     private LocalDateTime visitedAt;
+
+    private LocalDateTime lastSeenAt;
 
     public Visit() {
     }
@@ -27,6 +36,20 @@ public class Visit {
     public Visit(String visitorId) {
         this.visitorId = visitorId;
         this.visitedAt = LocalDateTime.now(VN_ZONE);
+    }
+
+    public Visit(String visitorId, String sessionId, String source, String language) {
+        this.id = sessionId;
+        this.visitorId = visitorId;
+        this.sessionId = sessionId;
+        this.source = source;
+        this.language = language;
+        this.visitedAt = LocalDateTime.now(VN_ZONE);
+    }
+
+    public void updateDetails(String source, String language) {
+        this.source = source;
+        this.language = language;
     }
 
     public String getId() {
@@ -37,7 +60,27 @@ public class Visit {
         return visitorId;
     }
 
+    public String getSessionId() {
+        return sessionId;
+    }
+
+    public String getSource() {
+        return source;
+    }
+
+    public String getLanguage() {
+        return language;
+    }
+
     public LocalDateTime getVisitedAt() {
         return visitedAt;
+    }
+
+    public LocalDateTime getLastSeenAt() {
+        return lastSeenAt;
+    }
+
+    public void touchPresence() {
+        this.lastSeenAt = LocalDateTime.now(VN_ZONE);
     }
 }

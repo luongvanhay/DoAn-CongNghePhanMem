@@ -6,7 +6,7 @@ COPY src ./src
 RUN mvn clean package -DskipTests
 
 # Giai đoạn 2: Chạy file .jar
-FROM eclipse-temurin:17-jre
+FROM amazoncorretto:17-alpine
 WORKDIR /app
 COPY --from=build /app/target/*.jar app.jar
 EXPOSE 3003

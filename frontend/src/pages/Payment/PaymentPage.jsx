@@ -1,192 +1,355 @@
 import { useEffect, useState } from "react";
 import {
-  CreditCard,
-  Banknote,
-  ShieldCheck,
-  MapPin,
   ArrowLeft,
-  QrCode,
+  Banknote,
   CheckCircle2,
+  CreditCard,
+  MapPin,
+  QrCode,
+  ShieldCheck,
 } from "lucide-react";
+import { supportedLanguageCodes } from "../../i18n";
+import { getVisitSessionId } from "../../services/contentService";
 import "./PaymentPage.css";
 
 const TICKET_PRICE = 50000;
-const PAYMENTS_API_URL = "/api/payments";
-const REQUEST_TIMEOUT_MS = 15000;
 
-export default function PaymentPage({ showResult = false }) {
-  const [method, setMethod] = useState("");
-  const [claimCode, setClaimCode] = useState("");
-  const [transactionCode, setTransactionCode] = useState("");
-  const [message, setMessage] = useState("");
-  const [status, setStatus] = useState("select");
-  const [loading, setLoading] = useState(false);
+const PAYMENT_COPY = {
+  siteLabel: "HỆ THỐNG THAM QUAN",
+  secure: "Thanh toán an toàn",
+  welcome: "CHÀO MỪNG QUÝ KHÁCH",
+  pageTitle: "Đăng ký quyền tham quan",
+  introduction:
+    "Vui lòng chọn phương thức thanh toán để sử dụng bản đồ tham quan và khám phá các địa điểm tại Chùa Linh Ứng.",
+  ticketPrice: "Giá vé: 50.000 đồng/lượt",
+  paymentSuccess: "Hello",
+  visitSite: "Vào trang tham quan",
+  chooseMethod: "Chọn phương thức thanh toán",
+  chooseMethodHint: "Chọn một trong hai hình thức bên dưới.",
+  onlineDescription: "Thanh toán trực tuyến qua cổng VNPAY",
+  cashMethod: "Thanh toán tiền mặt",
+  cashDescription: "Nhận mã xác nhận từ nhân viên",
+  onlineAmount: "Thanh toán an toàn qua VNPAY Sandbox. Số tiền: 50.000 đồng",
+  connectingVnpay: "Đang chuyển đến VNPAY...",
+  payByVnpay: "Thanh toán bằng VNPAY",
+  createCashHint:
+    "Tạo giao dịch trước, sau đó đưa mã giao dịch cho nhân viên tại điểm tham quan.",
+  creatingTransaction: "Đang tạo giao dịch...",
+  createCash: "Tạo giao dịch tiền mặt",
+  yourTransactionCode: "Mã giao dịch của bạn:",
+  amountDue: "Số tiền cần thanh toán: 50.000 đồng",
+  claimInstructions:
+    "Sau khi nhân viên xác nhận đã thu tiền, hãy nhập Claim code mà nhân viên cung cấp.",
+  claimCodeLabel: "Mã xác nhận (Claim code)",
+  claimCodePlaceholder: "Nhập mã do nhân viên cung cấp",
+  verifying: "Đang xác thực...",
+  verifyCode: "Xác thực mã",
+  anotherTransaction: "Tạo giao dịch khác",
+  selectMethodHint: "Vui lòng chọn phương thức thanh toán ở trên.",
+  paymentNote:
+    "Payoo Demo chỉ mô phỏng kết quả thanh toán, không kết nối Payoo thật. Thanh toán tiền mặt chỉ được cấp quyền sau khi nhân viên xác nhận và Claim code hợp lệ.",
+  backToMap: "Quay lại bản đồ",
+  loadingTranslation: "Đang dịch trang thanh toán...",
+  translationUnavailable:
+    "Không thể dịch trang thanh toán lúc này. Nội dung đang hiển thị bằng tiếng Việt.",
+  paymentError: "Không thể tạo giao dịch VNPAY.",
+  transactionDataError: "Máy chủ chưa trả về mã giao dịch hoặc URL VNPAY.",
+  cashError: "Không thể tạo giao dịch tiền mặt.",
+  transactionCodeError: "Máy chủ chưa trả về mã giao dịch.",
+  cashPending:
+    "Đưa mã giao dịch cho nhân viên và thanh toán 50.000 đồng. Sau khi nhân viên xác nhận, hãy nhập mã xác nhận được cung cấp.",
+  payooUpdateError: "Không thể cập nhật giao dịch Payoo Demo.",
+  payooSuccess: "Hello.",
+  payooCancelled: "Giao dịch Payoo Demo đã bị hủy.",
+  transactionPending: "Giao dịch chưa hoàn tất.",
+  payooError: "Có lỗi khi xử lý Payoo Demo.",
+  claimError: "Hello Hello.",
+  claimSuccess: "Xác thực thành công. Bạn có thể vào trang tham quan.",
+  transactionCheckError: "Không thể kiểm tra giao dịch.",
+  paidAndReady: "Thanh toán thành công. Bạn có thể vào trang tham quan.",
+  transactionCancelled: "Hello Hello.",
+  vnpayPending: "Giao dịch đang được xác nhận. Vui lòng chờ trong giây lát.",
+  payooPending: "Giao dịch Payoo Demo đang chờ xử lý.",
+  cashWaiting: "Đang chờ nhân viên xác nhận giao dịch tiền mặt.",
+};
 
-  // Khi quay lại trang bằng nút Back (bfcache), tránh bị kẹt ở trạng thái "đang kết nối".
-  useEffect(() => {
-    function onPageShow(event) {
-      if (event.persisted) setLoading(false);
-    }
-    window.addEventListener("pageshow", onPageShow);
-    return () => window.removeEventListener("pageshow", onPageShow);
-  }, []);
+const paymentTranslationCache = new Map();
 
-  if (showResult) {
-    const params = new URLSearchParams(window.location.search);
-    const paymentStatus = params.get("status");
-    const transaction = params.get("transactionCode");
-    const succeeded = paymentStatus === "success";
+async function translatePaymentText(text, target) {
+  if (!text || target === "vi") {
+    return text;
+  }
 
-    return (
-      <main className="payment-page">
-        <section className="payment-container">
-          <section className="payment-card">
-            <h1>{succeeded ? "Thanh toán thành công" : "Thanh toán chưa hoàn tất"}</h1>
-            <p>
-              {succeeded
-                ? "Giao dịch đã được xác nhận. Bạn có thể tiếp tục tham quan."
-                : paymentStatus === "invalid"
-                  ? "Không thể xác minh giao dịch. Vui lòng liên hệ nhân viên hỗ trợ."
-                  : "Giao dịch đã bị hủy hoặc không thành công. Bạn có thể thử lại."}
-            </p>
-            {transaction && (
-              <p>
-                Mã giao dịch: <strong>{transaction}</strong>
-              </p>
-            )}
-            <button
-              type="button"
-              className="payment-primary-button"
-              onClick={() => {
-                window.location.href = succeeded ? "/" : "/payment";
-              }}
-            >
-              {succeeded ? "Tiếp tục tham quan" : "Quay lại thanh toán"}
-            </button>
-          </section>
-        </section>
-      </main>
+  const cacheKey = `${target}:${text}`;
+  if (paymentTranslationCache.has(cacheKey)) {
+    return paymentTranslationCache.get(cacheKey);
+  }
+
+  const response = await fetch("/api/translation/translate", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ text, source: "vi", target }),
+  });
+
+  const data = await response.json().catch(() => ({}));
+
+  if (!response.ok || !data.translated_text) {
+    throw new Error(
+      data.message || `Dịch nội dung thất bại (HTTP ${response.status}).`,
     );
   }
 
-  function chooseMethod(value) {
-    setMethod(value);
-    setMessage("");
-    setStatus("select");
-    setClaimCode("");
-    setTransactionCode("");
+  paymentTranslationCache.set(cacheKey, data.translated_text);
+  return data.translated_text;
+}
+
+async function translatePaymentCopy(target) {
+  const entries = Object.entries(PAYMENT_COPY);
+  const markers = entries.map((_, index) => `[[PAYMENT_${index}]]`);
+
+  const text = entries
+    .map(([key], index) => `${markers[index]} ${PAYMENT_COPY[key]}`)
+    .join("\n");
+
+  const translated = await translatePaymentText(text, target);
+
+  const parts = markers.map((marker) => {
+    const markerIndex = translated.indexOf(marker);
+
+    if (markerIndex < 0) {
+      throw new Error("Bản dịch trang thanh toán không đầy đủ.");
+    }
+
+    return markerIndex;
+  });
+
+  return Object.fromEntries(
+    entries.map(([key], index) => {
+      const start = parts[index] + markers[index].length;
+      const end =
+        index + 1 < parts.length ? parts[index + 1] : translated.length;
+
+      return [key, translated.slice(start, end).trim()];
+    }),
+  );
+}
+
+function getCheckoutLanguage() {
+  const requestedLanguage = new URLSearchParams(window.location.search).get(
+    "lang",
+  );
+
+  return supportedLanguageCodes.has(requestedLanguage)
+    ? requestedLanguage
+    : "vi";
+}
+
+/**
+ * Gửi yêu cầu tạo giao dịch.
+ * Giữ nguyên endpoint và dữ liệu backend hiện tại.
+ */
+async function createPaymentRequest(payload) {
+  const response = await fetch("/api/payments", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "ngrok-skip-browser-warning": "1",
+    },
+    body: JSON.stringify(payload),
+  });
+
+  const responseText = await response.text();
+
+  let data = {};
+
+  try {
+    data = JSON.parse(responseText);
+  } catch {
+    // Giữ nguyên nội dung phản hồi nếu không phải JSON.
   }
 
-  async function handleCreateCashPayment() {
-    setLoading(true);
-    setMessage("");
+  if (!response.ok) {
+    const responseLooksLikeNgrok = /ngrok|browser warning|visit site/i.test(
+      responseText,
+    );
 
-    try {
-      const response = await fetch(PAYMENTS_API_URL, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          amount: TICKET_PRICE,
-          method: "CASH",
-        }),
+    const detail =
+      data.message ||
+      data.error ||
+      (responseLooksLikeNgrok
+        ? "Phản hồi có thể đến từ trang cảnh báo ngrok."
+        : responseText.slice(0, 300));
+
+    throw new Error(`HTTP ${response.status}: ${detail}`);
+  }
+
+  return data;
+}
+
+export default function PaymentPage() {
+  const language = getCheckoutLanguage();
+
+  const [transactionCode, setTransactionCode] = useState("");
+  const [method, setMethod] = useState("");
+  const [claimCode, setClaimCode] = useState("");
+  const [status, setStatus] = useState("ready");
+  const [message, setMessage] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [translatedCopy, setTranslatedCopy] = useState(null);
+  const [translationStatus, setTranslationStatus] = useState(
+    language === "vi" ? "ready" : "loading",
+  );
+  const [copyError, setCopyError] = useState("");
+  const [translatedMessage, setTranslatedMessage] = useState(null);
+
+  const copy =
+    language === "vi"
+      ? PAYMENT_COPY
+      : translatedCopy?.language === language
+        ? { ...PAYMENT_COPY, ...translatedCopy.values }
+        : PAYMENT_COPY;
+
+  const copyLoading =
+    language !== "vi" &&
+    translationStatus === "loading" &&
+    translatedCopy?.language !== language;
+
+  const displayMessage =
+    language === "vi" || !message
+      ? message
+      : translatedMessage?.language === language &&
+          translatedMessage.source === message
+        ? translatedMessage.text
+        : message;
+
+  useEffect(() => {
+    let cancelled = false;
+
+    if (language === "vi") {
+      return undefined;
+    }
+
+    void translatePaymentCopy(language)
+      .then((values) => {
+        if (!cancelled) {
+          setTranslatedCopy({ language, values });
+          setCopyError("");
+          setTranslationStatus("ready");
+        }
+      })
+      .catch((error) => {
+        if (!cancelled) {
+          setCopyError(error.message || PAYMENT_COPY.translationUnavailable);
+          setTranslationStatus("error");
+        }
       });
 
-      const data = await response.json().catch(() => ({}));
+    return () => {
+      cancelled = true;
+    };
+  }, [language]);
 
-      if (!response.ok) {
-        throw new Error(data.message || "Không thể tạo giao dịch.");
+  useEffect(() => {
+    let cancelled = false;
+
+    if (!message || language === "vi") {
+      return undefined;
+    }
+
+    void translatePaymentText(message, language)
+      .then((text) => {
+        if (!cancelled) {
+          setTranslatedMessage({ language, source: message, text });
+        }
+      })
+      .catch((error) => {
+        if (!cancelled) {
+          setCopyError(error.message || PAYMENT_COPY.translationUnavailable);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [language, message]);
+
+  function getPaymentSource() {
+    return new URLSearchParams(window.location.search).get("source");
+  }
+
+  async function createVnpayPayment() {
+    setLoading(true);
+    setStatus("ready");
+    setMessage("");
+    setClaimCode("");
+
+    try {
+      const data = await createPaymentRequest({
+        amount: TICKET_PRICE,
+        method: "VNPAY",
+        language,
+        source: getPaymentSource(),
+        sessionId: getVisitSessionId(),
+      });
+
+      if (!data.transactionCode || !data.paymentUrl) {
+        throw new Error(copy.transactionDataError);
       }
 
       setTransactionCode(data.transactionCode);
-      setStatus("pending");
-      setMessage(
-        "Đã tạo giao dịch. Vui lòng đưa mã giao dịch cho nhân viên và thanh toán 50.000 đồng. Sau khi nhân viên xác nhận, bạn sẽ nhận Claim code.",
-      );
+      setMethod("online");
+
+      // Chuyển khách sang trang thanh toán VNPAY.
+      window.location.assign(data.paymentUrl);
     } catch (error) {
-      setStatus("notice");
-      setMessage(
-        error.message || "Không thể kết nối máy chủ. Vui lòng kiểm tra lại Backend.",
-      );
+      setStatus("error");
+      setMessage(error.message || copy.paymentError);
     } finally {
       setLoading(false);
     }
   }
 
-  // Tạo giao dịch VNPay rồi chuyển sang trang chọn phương thức thanh toán.
-  async function handleVNPayPayment() {
+  async function createCashPayment() {
     setLoading(true);
+    setStatus("ready");
     setMessage("");
-    setStatus("select");
-
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+    setClaimCode("");
 
     try {
-      const response = await fetch(PAYMENTS_API_URL, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          amount: TICKET_PRICE,
-          method: "VNPAY",
-        }),
-        signal: controller.signal,
+      const data = await createPaymentRequest({
+        amount: TICKET_PRICE,
+        method: "CASH",
+        language,
+        source: getPaymentSource(),
+        sessionId: getVisitSessionId(),
       });
 
-      const data = await response.json().catch(() => ({}));
-
-      if (!response.ok) {
-        throw new Error(
-          data.message ||
-            `Không thể tạo giao dịch VNPay (HTTP ${response.status}).`,
-        );
+      if (!data.transactionCode) {
+        throw new Error(copy.transactionCodeError);
       }
 
-      if (!data.paymentUrl) {
-        throw new Error("Không nhận được đường dẫn thanh toán từ máy chủ.");
-      }
-
-      // Chuyển trình duyệt sang trang thanh toán VNPay (có mã QR để quét)
-      window.location.href = data.paymentUrl;
+      setTransactionCode(data.transactionCode);
+      setMethod("cash");
+      setStatus("pending");
+      setMessage(copy.cashPending);
     } catch (error) {
-      setStatus("notice");
-      setMessage(
-        error.name === "AbortError"
-          ? "Máy chủ phản hồi quá lâu. Vui lòng kiểm tra Backend và thử lại."
-          : error.message ||
-              "Không thể kết nối máy chủ. Vui lòng kiểm tra lại Backend.",
-      );
-      setLoading(false);
+      setStatus("error");
+      setMessage(error.message || copy.cashError);
     } finally {
-      clearTimeout(timeout);
+      setLoading(false);
     }
   }
 
-  async function handleClaimSubmit(event) {
+  async function submitClaimCode(event) {
     event.preventDefault();
-
-    if (!transactionCode) {
-      setMessage("Vui lòng tạo giao dịch tiền mặt trước.");
-      return;
-    }
-
-    if (!claimCode.trim()) {
-      setMessage("Vui lòng nhập Claim code do nhân viên cung cấp.");
-      return;
-    }
 
     setLoading(true);
     setMessage("");
 
     try {
-      const response = await fetch(`${PAYMENTS_API_URL}/claim`, {
+      const response = await fetch("/api/payments/claim", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           claimCode: claimCode.trim(),
         }),
@@ -195,21 +358,113 @@ export default function PaymentPage({ showResult = false }) {
       const data = await response.json().catch(() => ({}));
 
       if (!response.ok) {
-        throw new Error(data.message || "Không thể xác thực Claim code.");
+        throw new Error(data.message || copy.claimError);
       }
 
       setStatus("success");
-      setMessage(
-        data.message || "Xác thực thành công. Quyền truy cập đã được cấp.",
-      );
+      setMessage(data.message || copy.claimSuccess);
     } catch (error) {
-      setStatus("notice");
-      setMessage(
-        error.message || "Không thể kết nối máy chủ. Vui lòng thử lại.",
-      );
+      setStatus("error");
+      setMessage(error.message || copy.claimError);
     } finally {
       setLoading(false);
     }
+  }
+
+  function resetPayment() {
+    setTransactionCode("");
+    setMethod("");
+    setClaimCode("");
+    setStatus("ready");
+    setMessage("");
+    setLoading(false);
+  }
+
+  useEffect(() => {
+    const returnedTransactionCode = new URLSearchParams(
+      window.location.search,
+    ).get("transactionCode");
+
+    if (!returnedTransactionCode) {
+      return undefined;
+    }
+
+    let cancelled = false;
+
+    async function loadReturnedPayment() {
+      setLoading(true);
+
+      try {
+        const response = await fetch(
+          `/api/payments/${encodeURIComponent(returnedTransactionCode)}`,
+        );
+
+        const data = await response.json().catch(() => ({}));
+
+        if (!response.ok) {
+          throw new Error(data.message || PAYMENT_COPY.transactionCheckError);
+        }
+
+        if (cancelled) {
+          return;
+        }
+
+        setTransactionCode(data.transactionCode);
+
+        setMethod(
+          data.method === "PAYOO"
+            ? "payoo"
+            : data.method === "VNPAY"
+              ? "online"
+              : "cash",
+        );
+
+        if (data.status === "PAID" && data.accessGranted) {
+          setStatus("success");
+          setMessage(PAYMENT_COPY.paidAndReady);
+        } else if (data.status === "FAILED" || data.status === "CANCELLED") {
+          setStatus("error");
+          setMessage(PAYMENT_COPY.transactionCancelled);
+        } else {
+          setStatus("pending");
+          setMessage(
+            data.method === "VNPAY"
+              ? PAYMENT_COPY.vnpayPending
+              : data.method === "PAYOO"
+                ? PAYMENT_COPY.payooPending
+                : PAYMENT_COPY.cashWaiting,
+          );
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setStatus("error");
+          setMessage(error.message || PAYMENT_COPY.transactionCheckError);
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
+    }
+
+    void loadReturnedPayment();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  function continueToVisitorSite() {
+    sessionStorage.setItem("visitorPaid", "1");
+
+    const visitorUrl = new URL("/", window.location.origin);
+    visitorUrl.searchParams.set("lang", language);
+
+    if (getPaymentSource() === "qr") {
+      visitorUrl.searchParams.set("source", "qr");
+    }
+
+    window.location.assign(visitorUrl);
   }
 
   return (
@@ -219,196 +474,229 @@ export default function PaymentPage({ showResult = false }) {
           <div className="payment-brand-icon">
             <MapPin size={23} />
           </div>
+
           <div>
-            <strong>Chùa Linh Ứng</strong>
-            <span>HỆ THỐNG THAM QUAN</span>
+            <strong>Hệ Thống Thuyết Minh Tự Động</strong>
+            <span>{copy.siteLabel}</span>
           </div>
         </div>
 
         <span className="payment-secure">
           <ShieldCheck size={16} />
-          Thanh toán an toàn
+          {copy.secure}
         </span>
       </header>
 
       <section className="payment-container">
+        {copyLoading && (
+          <div className="payment-message" role="status">
+            {copy.loadingTranslation}
+          </div>
+        )}
+
+        {copyError && (
+          <div className="payment-message" role="alert">
+            {copyError}
+          </div>
+        )}
+
         <div className="payment-intro">
           <div className="payment-qr-icon">
             <QrCode size={30} />
           </div>
-          <p className="payment-eyebrow">CHÀO MỪNG QUÝ KHÁCH</p>
-          <h1>Đăng ký quyền tham quan</h1>
-          <p>
-            Vui lòng chọn phương thức thanh toán để sử dụng bản đồ tham quan và
-            khám phá các địa điểm tại Chùa Linh Ứng.
-          </p>
-          <p>
-            Giá vé: <strong>50.000 đồng/lượt</strong>
-          </p>
+
+          <p className="payment-eyebrow">{copy.welcome}</p>
+          <h1>{copy.pageTitle}</h1>
+          <p>{copy.introduction}</p>
+          <p className="payment-price">{copy.ticketPrice}</p>
         </div>
 
         <section className="payment-card">
-          <h2>Chọn phương thức thanh toán</h2>
-          <p className="payment-description">
-            Chọn một trong hai hình thức bên dưới.
-          </p>
+          {status === "success" ? (
+            <div className="payment-success">
+              <CheckCircle2 size={48} />
+              <h2>{copy.paymentSuccess}</h2>
+              <p>{displayMessage}</p>
 
-          <button
-            type="button"
-            className={`payment-option ${
-              method === "vnpay" ? "selected" : ""
-            }`}
-            onClick={() => chooseMethod("vnpay")}
-            disabled={loading || status === "success"}
-          >
-            <span className="payment-option-icon online">
-              <CreditCard size={24} />
-            </span>
-            <span className="payment-option-text">
-              <strong>Thanh toán trực tuyến</strong>
-              <span>Thanh toán qua cổng VNPay</span>
-            </span>
-            <span className="payment-radio">
-              {method === "vnpay" ? "✓" : ""}
-            </span>
-          </button>
-
-          <button
-            type="button"
-            className={`payment-option ${method === "cash" ? "selected" : ""}`}
-            onClick={() => chooseMethod("cash")}
-            disabled={loading || status === "success"}
-          >
-            <span className="payment-option-icon cash">
-              <Banknote size={24} />
-            </span>
-            <span className="payment-option-text">
-              <strong>Thanh toán tiền mặt</strong>
-              <span>Nhận mã xác nhận từ nhân viên</span>
-            </span>
-            <span className="payment-radio">
-              {method === "cash" ? "✓" : ""}
-            </span>
-          </button>
-
-          {method === "vnpay" && (
-            <div className="payment-action-panel">
-              <p>
-                Giá vé là 50.000 đồng/lượt. Sau khi tiếp tục, VNPay sẽ hiển thị
-                các phương thức thanh toán được hỗ trợ.
-              </p>
               <button
                 type="button"
                 className="payment-primary-button"
-                onClick={handleVNPayPayment}
-                disabled={loading}
+                onClick={continueToVisitorSite}
               >
-                {loading ? "Đang kết nối VNPay..." : "Tiếp tục thanh toán"}
+                {copy.visitSite}
               </button>
             </div>
-          )}
+          ) : (
+            <>
+              <h2>{copy.chooseMethod}</h2>
+              <p className="payment-description">{copy.chooseMethodHint}</p>
 
-          {method === "cash" && status !== "success" && (
-            <div className="payment-action-panel">
-              {!transactionCode ? (
-                <>
-                  <p>
-                    Tạo giao dịch trước, sau đó đưa mã giao dịch cho nhân viên
-                    tại điểm tham quan.
-                  </p>
+              <div className="payment-method-options">
+                <button
+                  type="button"
+                  className={`payment-option ${
+                    method === "online" ? "selected" : ""
+                  }`}
+                  onClick={() => setMethod("online")}
+                  disabled={loading || copyLoading || Boolean(transactionCode)}
+                >
+                  <span className="payment-option-icon online">
+                    <CreditCard size={22} />
+                  </span>
+
+                  <span className="payment-option-text">
+                    <strong>VNPAY</strong>
+                    <span>{copy.onlineDescription}</span>
+                  </span>
+
+                  <span className="payment-radio">
+                    {method === "online" ? "✓" : ""}
+                  </span>
+                </button>
+
+                <button
+                  type="button"
+                  className={`payment-option ${
+                    method === "cash" ? "selected" : ""
+                  }`}
+                  onClick={() => setMethod("cash")}
+                  disabled={loading || copyLoading || Boolean(transactionCode)}
+                >
+                  <span className="payment-option-icon cash">
+                    <Banknote size={22} />
+                  </span>
+
+                  <span className="payment-option-text">
+                    <strong>{copy.cashMethod}</strong>
+                    <span>{copy.cashDescription}</span>
+                  </span>
+
+                  <span className="payment-radio">
+                    {method === "cash" ? "✓" : ""}
+                  </span>
+                </button>
+              </div>
+
+              {method === "online" && (
+                <div className="payment-action-panel">
+                  <p>{copy.onlineAmount}</p>
+
                   <button
                     type="button"
                     className="payment-primary-button"
-                    onClick={handleCreateCashPayment}
-                    disabled={loading}
+                    onClick={createVnpayPayment}
+                    disabled={loading || copyLoading}
                   >
-                    {loading
-                      ? "Đang tạo giao dịch..."
-                      : "Tạo giao dịch tiền mặt"}
+                    {loading ? copy.connectingVnpay : copy.payByVnpay}
                   </button>
-                </>
-              ) : (
-                <>
-                  <p>Mã giao dịch của bạn:</p>
-                  <strong>{transactionCode}</strong>
-                  <p>
-                    Số tiền cần thanh toán: <strong>50.000 đồng</strong>
-                  </p>
-                  <p>
-                    Sau khi nhân viên xác nhận đã thu tiền, hãy nhập Claim code
-                    mà nhân viên cung cấp.
-                  </p>
 
-                  <form onSubmit={handleClaimSubmit}>
-                    <label htmlFor="claimCode">Mã xác nhận (Claim code)</label>
-                    <input
-                      id="claimCode"
-                      type="text"
-                      value={claimCode}
-                      onChange={(event) => setClaimCode(event.target.value)}
-                      placeholder="Nhập mã do nhân viên cung cấp"
-                      autoComplete="off"
-                      disabled={loading}
-                    />
+                  {message && (
+                    <div className="payment-message" role="alert">
+                      <span>{displayMessage}</span>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {method === "cash" && (
+                <div className="payment-action-panel">
+                  {!transactionCode ? (
+                    <>
+                      <p>{copy.createCashHint}</p>
+
+                      <button
+                        type="button"
+                        className="payment-primary-button"
+                        onClick={createCashPayment}
+                        disabled={loading || copyLoading}
+                      >
+                        {loading ? copy.creatingTransaction : copy.createCash}
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <p>{copy.yourTransactionCode}</p>
+
+                      <strong className="payment-transaction-code-value">
+                        {transactionCode}
+                      </strong>
+
+                      <p>{copy.amountDue}</p>
+                      <p>{copy.claimInstructions}</p>
+
+                      <form
+                        className="payment-claim-form"
+                        onSubmit={submitClaimCode}
+                      >
+                        <label htmlFor="claim-code">
+                          {copy.claimCodeLabel}
+                        </label>
+
+                        <input
+                          id="claim-code"
+                          value={claimCode}
+                          onChange={(event) => setClaimCode(event.target.value)}
+                          autoComplete="off"
+                          disabled={loading || copyLoading}
+                          placeholder={copy.claimCodePlaceholder}
+                        />
+
+                        <button
+                          type="submit"
+                          className="payment-primary-button"
+                          disabled={loading || copyLoading || !claimCode.trim()}
+                        >
+                          {loading ? copy.verifying : copy.verifyCode}
+                        </button>
+                      </form>
+                    </>
+                  )}
+
+                  {message && (
+                    <div className="payment-message" role="alert">
+                      <span>{displayMessage}</span>
+                    </div>
+                  )}
+
+                  {status === "error" && transactionCode && (
                     <button
-                      type="submit"
+                      type="button"
                       className="payment-primary-button"
-                      disabled={loading}
+                      onClick={resetPayment}
+                      disabled={loading || copyLoading}
                     >
-                      {loading ? "Đang xác thực..." : "Xác thực mã"}
+                      {copy.anotherTransaction}
                     </button>
-                  </form>
-                </>
+                  )}
+                </div>
               )}
-            </div>
-          )}
 
-          {message && (
-            <div className="payment-message" role="status">
-              {(status === "success" || status === "pending") && (
-                <CheckCircle2 size={18} />
+              {!method && (
+                <div className="payment-action-panel">
+                  <p>{copy.selectMethodHint}</p>
+                </div>
               )}
-              <span>{message}</span>
-            </div>
-          )}
-
-          {status === "success" && (
-            <div className="payment-action-panel">
-              <button
-                type="button"
-                className="payment-primary-button"
-                onClick={() => {
-                  window.location.href = "/";
-                }}
-              >
-                Tiếp tục tham quan
-              </button>
-            </div>
+            </>
           )}
 
           <div className="payment-note">
             <ShieldCheck size={18} />
-            <span>
-              Quyền truy cập chỉ được cấp sau khi máy chủ xác minh giao dịch đã
-              thanh toán và Claim code hợp lệ.
-            </span>
+            <span>{copy.paymentNote}</span>
           </div>
         </section>
 
         <button
           type="button"
           className="payment-back-button"
-          onClick={() => {
-            window.location.href = "/";
-          }}
+          onClick={() => window.location.assign("/")}
         >
           <ArrowLeft size={17} />
-          Quay lại bản đồ
+          {copy.backToMap}
         </button>
       </section>
 
       <footer className="payment-footer">
-        © {new Date().getFullYear()} Chùa Linh Ứng · Hệ thống tham quan
+        © {new Date().getFullYear()} Chùa Linh Ứng · {copy.siteLabel}
       </footer>
     </main>
   );

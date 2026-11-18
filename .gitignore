@@ -443,3 +443,17 @@ services/content-service.zip
 
 # Local source dump
 frontend/app-source.txt
+
+# Local secrets
+.env
+.env.*
+!.env.example
+
+# MongoDB local data and backups
+mongo_data/
+*.archive
+*.bson
+
+# Shared sample seed data
+!database/seed/*.json
+!database/init/*.sh

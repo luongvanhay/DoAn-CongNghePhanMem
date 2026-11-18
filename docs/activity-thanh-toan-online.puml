@@ -1,0 +1,84 @@
+@startuml
+title Activity diagram - Thanh toán online
+
+|Khách tham quan|
+start
+:Chọn phương thức thanh toán online;
+:Nhấn "Thanh toán";
+
+|Frontend|
+:Gửi yêu cầu tạo giao dịch\n(số tiền, phương thức, ngôn ngữ);
+
+|Content Service|
+:Kiểm tra số tiền = 50.000 đồng\nvà phương thức hợp lệ;
+if (Dữ liệu hợp lệ?) then (Không)
+  |Frontend|
+  :Hiển thị thông báo lỗi;
+  stop
+else (Có)
+  |Content Service|
+  if (Phương thức?) then (VNPay)
+    if (Đã cấu hình VNPay?) then (Không)
+      |Frontend|
+      :Thông báo VNPay chưa được cấu hình;
+      stop
+    else (Có)
+      |Content Service|
+      :Tạo mã giao dịch, trạng thái PENDING;
+      :Tạo URL thanh toán VNPay;
+      |MongoDB|
+      :Lưu giao dịch;
+      |Frontend|
+      :Chuyển khách đến VNPay;
+      |Cổng VNPay|
+      :Khách xác nhận thanh toán;
+      :Gửi kết quả về hệ thống;
+      |Content Service|
+      :Kiểm tra chữ ký, mã giao dịch,\nsố tiền và kết quả VNPay;
+      if (Kết quả hợp lệ và thành công?) then (Có)
+        :Cập nhật PAID, cấp quyền truy cập;
+        |MongoDB|
+        :Lưu trạng thái PAID;
+        |Frontend|
+        :Hiển thị thanh toán thành công;
+        :Cho phép vào bản đồ tham quan;
+        stop
+      else (Không)
+        |Content Service|
+        :Cập nhật FAILED\nnếu giao dịch đang PENDING;
+        |MongoDB|
+        :Lưu trạng thái giao dịch;
+        |Frontend|
+        :Hiển thị thanh toán thất bại;
+        stop
+      endif
+    endif
+  else (Payoo Demo)
+    |Content Service|
+    :Tạo mã giao dịch, trạng thái PENDING;
+    |MongoDB|
+    :Lưu giao dịch;
+    |Frontend|
+    :Hiển thị màn hình Payoo Demo;
+    :Khách chọn xác nhận hoặc hủy;
+    if (Khách xác nhận?) then (Có)
+      |Content Service|
+      :Cập nhật PAID, cấp quyền truy cập;
+      |MongoDB|
+      :Lưu trạng thái PAID;
+      |Frontend|
+      :Hiển thị thanh toán thành công;
+      :Cho phép vào bản đồ tham quan;
+      stop
+    else (Không)
+      |Content Service|
+      :Cập nhật FAILED, không cấp quyền;
+      |MongoDB|
+      :Lưu trạng thái FAILED;
+      |Frontend|
+      :Thông báo giao dịch đã hủy;
+      stop
+    endif
+  endif
+endif
+@enduml

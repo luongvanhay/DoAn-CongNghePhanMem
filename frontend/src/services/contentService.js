@@ -11,8 +11,8 @@ export async function getContents() {
   return response.json();
 }
 
-// Lấy hoặc tạo mã nhận diện trình duyệt
-function getVisitorId() {
+// Lấy hoặc tạo mã nhận diện ẩn danh của trình duyệt
+export function getVisitorId() {
   let id = localStorage.getItem("visitorId");
 
   if (!id) {
@@ -27,12 +27,40 @@ function getVisitorId() {
   return id;
 }
 
-// Ghi nhận một lượt truy cập trong mỗi phiên tab
-export async function recordVisit() {
-  if (sessionStorage.getItem("visitRecorded")) {
-    return;
+export function getVisitSessionId() {
+  let id = sessionStorage.getItem("visitSessionId");
+
+  if (!id) {
+    id =
+      typeof crypto !== "undefined" && crypto.randomUUID
+        ? crypto.randomUUID()
+        : Date.now().toString(36) + Math.random().toString(36).slice(2);
+
+    sessionStorage.setItem("visitSessionId", id);
   }
 
+  return id;
+}
+
+export async function recordActivePresence(language = "") {
+  try {
+    await fetch(`${API_BASE_URL}/visits/presence`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        visitorId: getVisitorId(),
+        sessionId: getVisitSessionId(),
+        source: new URLSearchParams(window.location.search).get("source") === "qr" ? "qr" : "direct",
+        language,
+      }),
+    });
+  } catch (error) {
+    console.error("Khong the cap nhat hien dien:", error);
+  }
+}
+
+// Lưu một lượt truy cập theo tab và cập nhật ngôn ngữ đã chọn.
+export async function recordVisit(language = "") {
   try {
     const response = await fetch(`${API_BASE_URL}/visits`, {
       method: "POST",
@@ -41,6 +69,11 @@ export async function recordVisit() {
       },
       body: JSON.stringify({
         visitorId: getVisitorId(),
+        sessionId: getVisitSessionId(),
+        source: new URLSearchParams(window.location.search).get("source") === "qr"
+          ? "qr"
+          : "direct",
+        language,
       }),
     });
 
@@ -48,8 +81,6 @@ export async function recordVisit() {
       throw new Error(`Lỗi ghi nhận lượt truy cập: ${response.status}`);
     }
 
-    // Chỉ đánh dấu sau khi API ghi nhận thành công
-    sessionStorage.setItem("visitRecorded", "1");
   } catch (error) {
     console.error("Không thể ghi nhận lượt truy cập:", error);
   }

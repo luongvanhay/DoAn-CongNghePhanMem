@@ -1,6 +1,5 @@
 services:
   api-gateway:
-    platform: linux/amd64
     build:
       context: ./services/api-gateway
     ports:
@@ -11,6 +10,7 @@ services:
       - CONTENT_SERVICE_URL=http://content-service:3001
       - TRANSLATION_SERVICE_URL=http://translation-service:3002
       - TTS_SERVICE_URL=http://tts-service:3003
+      - INTERNAL_API_SECRET=${INTERNAL_API_SECRET}
     depends_on:
       - auth-service
       - content-service
@@ -18,7 +18,6 @@ services:
       - tts-service
 
   auth-service:
-    platform: linux/amd64
     build:
       context: ./services/auth-service
     ports:
@@ -26,18 +25,19 @@ services:
     environment:
       - JWT_SECRET=${JWT_SECRET}
       - MONGODB_URI=mongodb://mongodb:27017/auth_db
+      - ADMIN_USERNAME=${ADMIN_USERNAME:-}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD:-}
+      - INTERNAL_API_SECRET=${INTERNAL_API_SECRET}
     depends_on:
       - mongodb
 
   tts-service:
-    platform: linux/amd64
     build:
       context: ./services/tts-service
     ports:
       - "3003:3003"
 
   content-service:
-    platform: linux/amd64
     build:
       context: ./services/content-service
     ports:
@@ -45,28 +45,34 @@ services:
     environment:
       - JWT_SECRET=${JWT_SECRET}
       - MONGODB_URI=mongodb://mongodb:27017/content_db
-      - VNP_TMN_CODE=${VNP_TMN_CODE}
-      - VNP_HASH_SECRET=${VNP_HASH_SECRET}
-      - VNP_RETURN_URL=${VNP_RETURN_URL:-http://localhost:3001/payments/vnpay-return}
-      - VNP_FRONTEND_RETURN_URL=${VNP_FRONTEND_RETURN_URL:-http://localhost:5173/payment-result}
+      - VNPAY_TMN_CODE=${VNPAY_TMN_CODE:-}
+      - VNPAY_HASH_SECRET=${VNPAY_HASH_SECRET:-}
+      - VNPAY_RETURN_URL=${VNPAY_RETURN_URL:-http://localhost:3000/payments/vnpay/return}
+      - PAYMENT_FRONTEND_RETURN_URL=${PAYMENT_FRONTEND_RETURN_URL:-http://localhost:5173/payment}
+      - AUTH_SERVICE_URL=http://auth-service:3004
+      - INTERNAL_API_SECRET=${INTERNAL_API_SECRET}
     depends_on:
       - mongodb
     restart: always
 
   translation-service:
-    platform: linux/amd64
     build:
       context: ./services/translation-service
     ports:
       - "3002:3002"
+    environment:
+      - TRANSLATION_API_URL=${TRANSLATION_API_URL:-}
+      - TRANSLATION_API_KEY=${TRANSLATION_API_KEY:-}
     restart: always
 
   mongodb:
     image: mongo:8
     ports:
-      - "27017:27017"
+      - "27018:27017"
     volumes:
       - mongo_data:/data/db
+      - ./database/init:/docker-entrypoint-initdb.d:ro
+      - ./database/seed:/seed:ro
 
 volumes:
   mongo_data:

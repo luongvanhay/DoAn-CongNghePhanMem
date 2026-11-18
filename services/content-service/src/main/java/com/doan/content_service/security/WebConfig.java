@@ -20,7 +20,10 @@ public class WebConfig implements WebMvcConfigurer {
                 .addPathPatterns(
                         "/contents",
                         "/contents/**",
-                        "/payments/*/confirm-cash"
+                        "/payments/cash/pending",
+                        "/payments/*/confirm-cash",
+                        "/visits/recent",
+                        "/visits/stats"
                 );
     }
 }

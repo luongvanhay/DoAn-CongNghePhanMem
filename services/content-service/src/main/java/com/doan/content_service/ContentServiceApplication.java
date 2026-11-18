@@ -1,3 +1,4 @@
+
 package com.doan.content_service;
 
 import org.springframework.boot.SpringApplication;
@@ -8,6 +9,7 @@ import org.springframework.data.mongodb.config.EnableMongoAuditing;
 @EnableMongoAuditing
 public class ContentServiceApplication {
     public static void main(String[] args) {
+        System.out.println("MONGODB_URI env = " + System.getenv("MONGODB_URI"));
         SpringApplication.run(ContentServiceApplication.class, args);
     }
 }

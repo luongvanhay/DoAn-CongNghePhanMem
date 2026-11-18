@@ -1,20 +1,10 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import "./index.css";
-import App from "./App.jsx";
-import PaymentPage from "./pages/Payment/PaymentPage.jsx";
-
-const path = window.location.pathname;
-
-const page =
-  path === "/payment" ? (
-    <PaymentPage />
-  ) : path === "/payment-result" ? (
-    <PaymentPage showResult />
-  ) : (
-    <App />
-  );
+import AppRouter from "./router.jsx";
 
 createRoot(document.getElementById("root")).render(
-  <StrictMode>{page}</StrictMode>,
+  <StrictMode>
+    <AppRouter />
+  </StrictMode>,
 );
