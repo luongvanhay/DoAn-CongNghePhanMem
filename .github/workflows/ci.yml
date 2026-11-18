@@ -5,6 +5,11 @@ on:
   push:
   pull_request:
     branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
@@ -42,6 +47,22 @@ jobs:
     name: Backend - Maven Build
     runs-on: ubuntu-latest
 
+    services:
+      mongodb:
+        image: mongo:8
+        ports:
+          - 27017:27017
+        options: >-
+          --health-cmd "mongosh --quiet --eval 'db.adminCommand({ ping: 1 })'"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      JWT_SECRET: MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=
+      INTERNAL_API_SECRET: ci-only-internal-secret
+      MONGODB_URI: mongodb://localhost:27017/ci_db
+
     strategy:
       fail-fast: false
       matrix:
@@ -63,9 +84,33 @@ jobs:
           java-version: '17'
           cache: maven
           cache-dependency-path: services/${{ matrix.service }}/pom.xml
-      - name: Build service
+      - name: Test and package service
         working-directory: services/${{ matrix.service }}
-        env:
-          JWT_SECRET: ${{ secrets.JWT_SECRET }}
-        run: mvn -B -ntp -U package
+        run: mvn -B -ntp verify
+
+  container-build:
+    name: Docker - Build Service Images
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        service:
+          - api-gateway
+          - auth-service
+          - content-service
+          - translation-service
+          - tts-service
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build service image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./services/${{ matrix.service }}
+          push: false
 
