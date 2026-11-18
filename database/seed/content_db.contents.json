@@ -9,7 +9,7 @@
   "latitude": 16.003,
   "longitude": 108.264,
   "triggerRadius": 30,
-  "imageUrl": "http://localhost:5173/hinh-anh-chua-linh-ung-bai-bui-.jpg",
+  "imageUrl": "/hinh-anh-chua-linh-ung-bai-bui-.jpg",
   "audioPriority": 0,
   "active": true,
   "translations": [
@@ -101,7 +101,7 @@
   "latitude": 10,
   "longitude": 100,
   "triggerRadius": 30,
-  "imageUrl": "http://localhost:5173/Chùa-Linh-Ứng-Bãi-Bụt1.jpg",
+  "imageUrl": "/Chùa-Linh-Ứng-Bãi-Bụt1.jpg",
   "audioPriority": 0,
   "active": true,
   "translations": [],
