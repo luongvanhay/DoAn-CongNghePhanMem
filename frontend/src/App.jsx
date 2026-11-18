@@ -272,7 +272,10 @@ function MapApp({ language, onChangeLanguage, onOpenLanguageSelection }) {
   const audioRef = useRef(null);
   const audioRequestRef = useRef(null);
   const chatEndRef = useRef(null);
+<<<<<<< Updated upstream
   const chatMessageSequenceRef = useRef(0);
+=======
+>>>>>>> Stashed changes
   const [loading, setLoading] = useState(true);
   const [apiError, setApiError] = useState("");
   const [reloadKey, setReloadKey] = useState(0);
@@ -607,12 +610,15 @@ function MapApp({ language, onChangeLanguage, onOpenLanguageSelection }) {
     playNarration();
   }
 
+<<<<<<< Updated upstream
   function addChatMessage(message) {
     const id = chatMessageSequenceRef.current;
     chatMessageSequenceRef.current += 1;
     setChatMessages((messages) => [...messages, { ...message, id }]);
   }
 
+=======
+>>>>>>> Stashed changes
   async function askQuestion(event) {
     event.preventDefault();
 
@@ -621,7 +627,14 @@ function MapApp({ language, onChangeLanguage, onOpenLanguageSelection }) {
       return;
     }
 
+<<<<<<< Updated upstream
     addChatMessage({ role: "user", content: submittedQuestion });
+=======
+    setChatMessages((messages) => [
+      ...messages,
+      { role: "user", content: submittedQuestion },
+    ]);
+>>>>>>> Stashed changes
     setQuestion("");
     setChatLoading(true);
     const controller = new AbortController();
@@ -650,6 +663,7 @@ function MapApp({ language, onChangeLanguage, onOpenLanguageSelection }) {
         throw new Error("Chatbot không trả về nội dung câu trả lời.");
       }
 
+<<<<<<< Updated upstream
       addChatMessage({
         role: "assistant",
         content: data.answer.trim(),
@@ -661,6 +675,25 @@ function MapApp({ language, onChangeLanguage, onOpenLanguageSelection }) {
           ? text.chatTimeout
           : error.message || "Không thể kết nối tới chatbot.";
       addChatMessage({ role: "assistant", content: message, isError: true });
+=======
+      setChatMessages((messages) => [
+        ...messages,
+        {
+          role: "assistant",
+          content: data.answer.trim(),
+          sources: Array.isArray(data.sources) ? data.sources : [],
+        },
+      ]);
+    } catch (error) {
+      const message =
+        error.name === "AbortError"
+          ? "Dịch vụ chatbot tạm thời không phản hồi. Vui lòng thử lại sau ít phút."
+          : error.message || "Không thể kết nối tới chatbot.";
+      setChatMessages((messages) => [
+        ...messages,
+        { role: "assistant", content: message, isError: true },
+      ]);
+>>>>>>> Stashed changes
     } finally {
       window.clearTimeout(timeoutId);
       setChatLoading(false);
@@ -1083,12 +1116,20 @@ function MapApp({ language, onChangeLanguage, onOpenLanguageSelection }) {
               {text.chatGreeting} {selected?.name || text.category}?
             </p>
 
+<<<<<<< Updated upstream
             {chatMessages.map((message) => (
+=======
+            {chatMessages.map((message, index) => (
+>>>>>>> Stashed changes
               <div
                 className={`chat-message ${
                   message.role === "user" ? "chat-message-user" : ""
                 }`}
+<<<<<<< Updated upstream
                 key={message.id}
+=======
+                key={index}
+>>>>>>> Stashed changes
               >
                 <p
                   className={`chat-bubble ${
@@ -1101,15 +1142,23 @@ function MapApp({ language, onChangeLanguage, onOpenLanguageSelection }) {
                 </p>
                 {message.sources?.length > 0 && (
                   <p className="chat-sources">
+<<<<<<< Updated upstream
                     {text.chatSource}: {message.sources.join(", ")}
+=======
+                    Nguồn: {message.sources.join(", ")}
+>>>>>>> Stashed changes
                   </p>
                 )}
               </div>
             ))}
             {chatLoading && (
+<<<<<<< Updated upstream
               <p className="chat-bubble" role="status">
                 {text.chatLoading}
               </p>
+=======
+              <p className="chat-bubble" role="status">Đang tìm câu trả lời...</p>
+>>>>>>> Stashed changes
             )}
             <div ref={chatEndRef} aria-hidden="true" />
           </div>
@@ -1124,7 +1173,11 @@ function MapApp({ language, onChangeLanguage, onOpenLanguageSelection }) {
             />
 
             <button type="submit" disabled={chatLoading || !question.trim()}>
+<<<<<<< Updated upstream
               {text.send}
+=======
+              {chatLoading ? "…" : text.send}
+>>>>>>> Stashed changes
             </button>
           </form>
         </section>

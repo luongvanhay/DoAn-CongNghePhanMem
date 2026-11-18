@@ -54,6 +54,9 @@ services:
       - CHAT_API_KEY=${CHAT_API_KEY:-}
       - AUTH_SERVICE_URL=http://auth-service:3004
       - INTERNAL_API_SECRET=${INTERNAL_API_SECRET}
+      - CHAT_API_URL=${CHAT_API_URL:-https://api.openai.com/v1/chat/completions}
+      - CHAT_MODEL=${CHAT_MODEL:-gpt-4o-mini}
+      - CHAT_API_KEY=${CHAT_API_KEY:-}
     depends_on:
       - mongodb
     restart: always
