@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { resolveImageUrl } from "../../utils/imageUrl.js";
+import PoiImageField from "../../components/PoiImageField.jsx";
+import { uploadPoiImage } from "../../services/contentService.js";
 import {
   MapPin,
   Plus,
@@ -76,6 +78,7 @@ export default function PoiOwnerDashboard() {
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState("");
   const [form, setForm] = useState({ ...EMPTY_FORM });
+  const [imageFile, setImageFile] = useState(null);
 
   const request = useCallback(
     async (path, options = {}) => {
@@ -150,6 +153,7 @@ export default function PoiOwnerDashboard() {
 
   function openCreateForm() {
     setEditingId("");
+    setImageFile(null);
     setForm({ ...EMPTY_FORM });
     setError("");
     setNotice("");
@@ -158,6 +162,7 @@ export default function PoiOwnerDashboard() {
 
   function openEditForm(place) {
     setEditingId(place.id);
+    setImageFile(null);
     setForm({
       title: place.title || "",
       body: place.body || "",
@@ -257,13 +262,19 @@ export default function PoiOwnerDashboard() {
       const url = editingId
         ? `${API_URL}/${encodeURIComponent(editingId)}`
         : API_URL;
+      const payload = toPayload();
+      if (imageFile) {
+        const token = localStorage.getItem("token") || "";
+        payload.imageUrl = await uploadPoiImage(imageFile, token);
+      }
 
       await request(url, {
         method: editingId ? "PUT" : "POST",
-        body: JSON.stringify(toPayload()),
+        body: JSON.stringify(payload),
       });
 
       setShowForm(false);
+      setImageFile(null);
       setForm({ ...EMPTY_FORM });
       setEditingId("");
       setNotice(editingId ? "Đã cập nhật địa điểm." : "Đã thêm địa điểm.");
@@ -597,17 +608,14 @@ export default function PoiOwnerDashboard() {
                 </label>
               </div>
 
-              <label>
-                URL hình ảnh
-                <input
-                  name="imageUrl"
-                  type="url"
-                  value={form.imageUrl}
-                  onChange={updateField}
-                  maxLength={500}
-                  placeholder="https://example.com/image.jpg"
-                />
-              </label>
+              <PoiImageField
+                file={imageFile}
+                imageUrl={form.imageUrl}
+                onFileChange={setImageFile}
+                onImageUrlChange={(imageUrl) =>
+                  setForm((current) => ({ ...current, imageUrl }))
+                }
+              />
 
               <div className="owner-form-two-columns">
                 <label>

@@ -2,6 +2,8 @@ import { useCallback, useEffect, useState } from "react";
 import { NavLink, useLocation } from "react-router-dom";
 import { QRCodeSVG } from "qrcode.react";
 import { languages } from "../../i18n";
+import PoiImageField from "../../components/PoiImageField.jsx";
+import { uploadPoiImage } from "../../services/contentService.js";
 import "./AdminDashboard.css";
 import CashPaymentManager from "./CashPaymentManager.jsx";
 import { formatNumber, readResponse } from "./adminUtils.js";
@@ -566,6 +568,7 @@ function ContentManager({ token }) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
+  const [imageFile, setImageFile] = useState(null);
 
   const loadContents = useCallback(async () => {
     setLoading(true);
@@ -596,6 +599,7 @@ function ContentManager({ token }) {
 
   function startEditing(content) {
     setEditingId(content.id);
+    setImageFile(null);
     setForm({
       ...emptyContentForm,
       title: content.title || "",
@@ -618,6 +622,7 @@ function ContentManager({ token }) {
 
   function resetForm() {
     setEditingId("");
+    setImageFile(null);
     setForm(emptyContentForm);
     setMessage("");
     setError("");
@@ -683,6 +688,10 @@ function ContentManager({ token }) {
       : CONTENTS_URL;
 
     try {
+      if (imageFile) {
+        payload.imageUrl = await uploadPoiImage(imageFile, token);
+      }
+
       const response = await fetch(url, {
         method: editingId ? "PUT" : "POST",
         headers: {
@@ -707,6 +716,7 @@ function ContentManager({ token }) {
           : "Đã thêm địa điểm và lưu vào MongoDB.",
       );
       setEditingId("");
+      setImageFile(null);
       setForm(emptyContentForm);
     } catch (err) {
       setError(err.message || "Không thể lưu nội dung địa điểm.");
@@ -879,17 +889,12 @@ function ContentManager({ token }) {
             />
           </label>
 
-          <label>
-            Đường dẫn ảnh (không bắt buộc)
-            <input
-              type="url"
-              value={form.imageUrl}
-              onChange={(event) =>
-                setForm({ ...form, imageUrl: event.target.value })
-              }
-              maxLength={500}
-            />
-          </label>
+          <PoiImageField
+            file={imageFile}
+            imageUrl={form.imageUrl}
+            onFileChange={setImageFile}
+            onImageUrlChange={(imageUrl) => setForm({ ...form, imageUrl })}
+          />
 
           <label className="admin-content-checkbox">
             <input

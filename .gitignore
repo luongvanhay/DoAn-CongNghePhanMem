@@ -451,6 +451,7 @@ frontend/app-source.txt
 
 # MongoDB local data and backups
 mongo_data/
+services/content-service/uploads/
 *.archive
 *.bson
 

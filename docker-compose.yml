@@ -45,6 +45,7 @@ services:
     environment:
       - JWT_SECRET=${JWT_SECRET}
       - MONGODB_URI=mongodb://mongodb:27017/content_db
+      - POI_IMAGE_DIR=/app/uploads/poi
       - VNPAY_TMN_CODE=${VNPAY_TMN_CODE:-}
       - VNPAY_HASH_SECRET=${VNPAY_HASH_SECRET:-}
       - VNPAY_RETURN_URL=${VNPAY_RETURN_URL:-http://localhost:3000/payments/vnpay/return}
@@ -60,6 +61,8 @@ services:
     depends_on:
       - mongodb
     restart: always
+    volumes:
+      - poi_images:/app/uploads/poi
 
   translation-service:
     build:
@@ -82,3 +85,4 @@ services:
 
 volumes:
   mongo_data:
+  poi_images:

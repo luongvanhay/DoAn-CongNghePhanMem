@@ -1,5 +1,43 @@
 const API_BASE_URL = "/api/content";
 
+export async function uploadPoiImage(file, token) {
+  if (file.size > 8 * 1024 * 1024) {
+    throw new Error("Ảnh không được lớn hơn 8 MB.");
+  }
+
+  if (!["image/jpeg", "image/png"].includes(file.type)) {
+    throw new Error("Chỉ hỗ trợ ảnh JPEG hoặc PNG.");
+  }
+
+  const formData = new FormData();
+  formData.append("file", file);
+
+  const response = await fetch(`${API_BASE_URL}/contents/images`, {
+    method: "POST",
+    headers: {
+      Accept: "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: formData,
+  });
+
+  const text = await response.text();
+  let data = {};
+  try {
+    data = text ? JSON.parse(text) : {};
+  } catch {
+    data = { message: text };
+  }
+
+  if (!response.ok || !data.imageUrl) {
+    throw new Error(
+      data.message || `Tải ảnh lên thất bại (${response.status}).`,
+    );
+  }
+
+  return data.imageUrl;
+}
+
 // Lấy danh sách địa điểm
 export async function getContents() {
   const response = await fetch(`${API_BASE_URL}/contents`);

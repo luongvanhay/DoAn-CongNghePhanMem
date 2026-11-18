@@ -32,6 +32,10 @@ Yêu cầu: Docker Desktop đang chạy và Node.js/npm đã được cài đặ
    Mở `http://localhost:5173`. Các thành viên dùng chung nội dung khởi tạo,
    nhưng dữ liệu phát sinh sau đó được lưu riêng trên máy mỗi người.
 
+Admin và chủ địa điểm đã được xác minh có thể chọn ảnh JPEG/PNG tối đa 8 MB khi
+thêm hoặc sửa POI. Ảnh được lưu trong Docker volume `poi_images` và được phục vụ
+qua API của ứng dụng; giữ volume này khi sao lưu dữ liệu địa điểm có ảnh đã tải lên.
+
 Không commit `.env`, mật khẩu, khóa JWT, khóa tích hợp hoặc bản sao database có
 dữ liệu người dùng thật. Các giá trị trong `.env.example` chỉ dành cho phát triển
 cục bộ; không dùng cho môi trường công khai.
