@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   getContents,
   recordActivePresence,
@@ -7,24 +7,14 @@ import {
 import AdminDashboard from "./pages/Admin/AdminDashboard";
 import { languages, messages, supportedLanguageCodes } from "./i18n";
 import StaffDashboard from "./pages/Staff/StaffDashboard.jsx";
-import { resolveImageUrl } from "./utils/imageUrl.js";
-
+import MapView from "./components/MapView.jsx";
+import Chatbot from "./components/Chatbot.jsx";
+import PoiDetail from "./components/PoiDetail.jsx";
 import {
-  MapContainer,
-  TileLayer,
-  CircleMarker,
-  Polyline,
-  Popup,
-  useMap,
-} from "react-leaflet";
-import {
-  MapPin,
   Navigation,
   Search,
   Languages,
   Headphones,
-  MessageCircle,
-  Menu,
   Compass,
   Volume2,
   LocateFixed,
@@ -43,10 +33,27 @@ function mapApiPlace(item) {
     description: item.body || "Chưa có nội dung thuyết minh.",
     imageUrl: item.imageUrl || "",
     position: [Number(item.latitude), Number(item.longitude)],
+    triggerRadius:
+      Number(item.triggerRadius) > 0 ? Number(item.triggerRadius) : 30,
     icon: "📍",
     sourceLanguage: item.sourceLanguage || "vi",
     translations: Array.isArray(item.translations) ? item.translations : [],
   };
+}
+
+function distanceMeters(from, to) {
+  const radians = (degrees) => (degrees * Math.PI) / 180;
+  const [fromLatitude, fromLongitude] = from;
+  const [toLatitude, toLongitude] = to;
+  const latitudeDelta = radians(toLatitude - fromLatitude);
+  const longitudeDelta = radians(toLongitude - fromLongitude);
+  const haversine =
+    Math.sin(latitudeDelta / 2) ** 2 +
+    Math.cos(radians(fromLatitude)) *
+      Math.cos(radians(toLatitude)) *
+      Math.sin(longitudeDelta / 2) ** 2;
+
+  return 6_371_000 * 2 * Math.atan2(Math.sqrt(haversine), Math.sqrt(1 - haversine));
 }
 
 // Ưu tiên bản dịch do quản trị viên lưu trong MongoDB.
@@ -150,28 +157,6 @@ async function translatePlace(place, language) {
 }
 
 // Điều khiển bản đồ khi chọn POI hoặc xác định GPS.
-function MapController({ place, userPosition, route }) {
-  const map = useMap();
-
-  useEffect(() => {
-    if (route?.coordinates?.length) {
-      map.fitBounds(route.coordinates, { padding: [48, 48], maxZoom: 16 });
-      return;
-    }
-    if (place) {
-      map.flyTo(place.position, 17, { duration: 1 });
-    }
-  }, [map, place, route]);
-
-  useEffect(() => {
-    if (userPosition) {
-      map.flyTo(userPosition, 17, { duration: 1 });
-    }
-  }, [map, userPosition]);
-
-  return null;
-}
-
 function LanguageSelection({ onSelect }) {
   return (
     <main className="language-selection">
@@ -251,6 +236,9 @@ function MapApp({ language, onChangeLanguage, onOpenLanguageSelection }) {
   const [query, setQuery] = useState("");
   const [position, setPosition] = useState(null);
   const [gpsMessage, setGpsMessage] = useState("");
+  const [autoNarrationEnabled, setAutoNarrationEnabled] = useState(
+    () => sessionStorage.getItem("autoNarrationEnabled") === "1",
+  );
   const [chatOpen, setChatOpen] = useState(false);
   const [question, setQuestion] = useState("");
   const [chatMessages, setChatMessages] = useState([]);
@@ -271,6 +259,8 @@ function MapApp({ language, onChangeLanguage, onOpenLanguageSelection }) {
     playbackMatchesSelection && audioPlayback.status === "loading";
   const audioRef = useRef(null);
   const audioRequestRef = useRef(null);
+  const locationWatchRef = useRef(null);
+  const enteredPoiIdsRef = useRef(new Set());
   const chatEndRef = useRef(null);
   const chatMessageSequenceRef = useRef(0);
   const [loading, setLoading] = useState(true);
@@ -397,6 +387,57 @@ function MapApp({ language, onChangeLanguage, onOpenLanguageSelection }) {
     };
   }, [selected?.id, selected?.description, language]);
 
+  useEffect(() => {
+    if (!autoNarrationEnabled) {
+      if (locationWatchRef.current != null && navigator.geolocation) {
+        navigator.geolocation.clearWatch(locationWatchRef.current);
+        locationWatchRef.current = null;
+      }
+      enteredPoiIdsRef.current.clear();
+      return undefined;
+    }
+
+    if (!navigator.geolocation) {
+      window.setTimeout(() => {
+        setGpsMessage("Trình duyệt không hỗ trợ định vị GPS.");
+        setAutoNarrationEnabled(false);
+        sessionStorage.removeItem("autoNarrationEnabled");
+      }, 0);
+      return undefined;
+    }
+
+    locationWatchRef.current = navigator.geolocation.watchPosition(
+      ({ coords }) => {
+        setPosition([coords.latitude, coords.longitude]);
+      },
+      (error) => {
+        if (error.code === 1) {
+          setGpsMessage(
+            language === "vi"
+              ? "Cần cấp quyền GPS để tự phát thuyết minh gần POI."
+              : "Location permission is required for proximity narration.",
+          );
+          setAutoNarrationEnabled(false);
+          sessionStorage.removeItem("autoNarrationEnabled");
+        } else {
+          setGpsMessage(
+            language === "vi"
+              ? "Chưa lấy được GPS. Hãy kiểm tra tín hiệu và thử lại."
+              : "Unable to get GPS. Check your signal and try again.",
+          );
+        }
+      },
+      { enableHighAccuracy: true, maximumAge: 2000, timeout: 15000 },
+    );
+
+    return () => {
+      if (locationWatchRef.current != null) {
+        navigator.geolocation.clearWatch(locationWatchRef.current);
+        locationWatchRef.current = null;
+      }
+    };
+  }, [autoNarrationEnabled, language]);
+
   const filteredPlaces = places.filter((place) =>
     place.name.toLowerCase().includes(query.trim().toLowerCase()),
   );
@@ -438,6 +479,26 @@ function MapApp({ language, onChangeLanguage, onOpenLanguageSelection }) {
         timeout: 10000,
         maximumAge: 0,
       },
+    );
+  }
+
+  function toggleAutoNarration() {
+    const nextEnabled = !autoNarrationEnabled;
+    if (nextEnabled && !navigator.geolocation) {
+      setGpsMessage("Trình duyệt không hỗ trợ định vị GPS.");
+      return;
+    }
+    sessionStorage.setItem("autoNarrationEnabled", nextEnabled ? "1" : "0");
+    enteredPoiIdsRef.current.clear();
+    setAutoNarrationEnabled(nextEnabled);
+    setGpsMessage(
+      nextEnabled
+        ? language === "vi"
+          ? "Đã bật tự phát. Cho phép GPS và âm thanh để nghe khi đến gần POI."
+          : "Proximity narration enabled. Allow location and audio playback."
+        : language === "vi"
+          ? "Đã tắt tự phát theo vị trí."
+          : "Proximity narration disabled.",
     );
   }
 
@@ -495,18 +556,7 @@ function MapApp({ language, onChangeLanguage, onOpenLanguageSelection }) {
       .finally(() => setRouteLoading(false));
   }
 
-  function toggleAudio() {
-    if (!selected) {
-      setGpsMessage(text.noPlaces);
-      return;
-    }
-
-    if (selected.translationMissing) {
-      setGpsMessage(text.translationError);
-      return;
-    }
-
-    if (playing || audioLoading) {
+  function stopNarration() {
       audioRequestRef.current?.abort();
       audioRequestRef.current = null;
 
@@ -525,20 +575,26 @@ function MapApp({ language, onChangeLanguage, onOpenLanguageSelection }) {
         language: null,
         description: null,
       });
+  }
+
+  const playNarration = useCallback((place, automatic = false) => {
+    if (!place || place.translationMissing) {
+      setGpsMessage(place ? text.translationError : text.noPlaces);
       return;
     }
+    if (automatic && (audioRequestRef.current || audioRef.current)) return;
 
     const controller = new AbortController();
     audioRequestRef.current = controller;
     setGpsMessage("");
     const narration = {
-      placeId: selected.id,
+      placeId: place.id,
       language,
-      description: selected.description,
+      description: place.description,
     };
     setAudioPlayback({ ...narration, status: "loading" });
 
-    async function playNarration() {
+    async function requestAndPlayNarration() {
       try {
         const response = await fetch("/api/tts/audio", {
           method: "POST",
@@ -546,7 +602,8 @@ function MapApp({ language, onChangeLanguage, onOpenLanguageSelection }) {
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            text: selected.description,
+            placeId: place.id,
+            text: place.description,
             lang:
               languages.find((item) => item.code === language)?.tts || language,
           }),
@@ -595,7 +652,13 @@ function MapApp({ language, onChangeLanguage, onOpenLanguageSelection }) {
           audioRef.current?.pause();
           audioRef.current = null;
           setAudioPlayback({ ...narration, status: "idle" });
-          setGpsMessage(text.narrationError);
+          setGpsMessage(
+            error.name === "NotAllowedError"
+              ? language === "vi"
+                ? `Đang ở gần ${place.name}. Chạm “Nghe thuyết minh” để cho phép phát âm thanh.`
+                : `Near ${place.name}. Tap “Play narration” to allow audio playback.`
+              : text.narrationError,
+          );
         }
       } finally {
         if (audioRequestRef.current === controller) {
@@ -603,9 +666,56 @@ function MapApp({ language, onChangeLanguage, onOpenLanguageSelection }) {
         }
       }
     }
+    void requestAndPlayNarration();
+  }, [language, text.noPlaces, text.narrationError, text.translationError]);
 
-    playNarration();
+  function toggleAudio() {
+    if (!selected) {
+      setGpsMessage(text.noPlaces);
+      return;
+    }
+
+    if (playing || audioLoading) {
+      stopNarration();
+      return;
+    }
+
+    playNarration(selected);
   }
+
+  useEffect(() => {
+    if (!autoNarrationEnabled || !position || places.length === 0) return;
+
+    const nearby = [];
+    for (const place of places) {
+      const distance = distanceMeters(position, place.position);
+      const radius = place.triggerRadius || 30;
+      if (distance > radius + Math.max(10, radius * 0.35)) {
+        enteredPoiIdsRef.current.delete(place.id);
+      } else if (distance <= radius && !enteredPoiIdsRef.current.has(place.id)) {
+        enteredPoiIdsRef.current.add(place.id);
+        nearby.push({ place, distance });
+      }
+    }
+
+    if (
+      nearby.length === 0 ||
+      audioRequestRef.current ||
+      audioRef.current
+    ) {
+      return;
+    }
+
+    nearby.sort((left, right) => left.distance - right.distance);
+    const nearestPlace = nearby[0].place;
+    setSelected(nearestPlace);
+    window.setTimeout(() => playNarration(nearestPlace, true), 50);
+  }, [
+    autoNarrationEnabled,
+    position,
+    places,
+    playNarration,
+  ]);
 
   function addChatMessage(message) {
     const id = chatMessageSequenceRef.current;
@@ -861,6 +971,22 @@ function MapApp({ language, onChangeLanguage, onOpenLanguageSelection }) {
                 </div>
 
                 <button
+                  className={`auto-narration-toggle ${autoNarrationEnabled ? "is-enabled" : ""}`}
+                  type="button"
+                  onClick={toggleAutoNarration}
+                  aria-pressed={autoNarrationEnabled}
+                  aria-label={
+                    language === "vi"
+                      ? autoNarrationEnabled ? "Tắt tự phát thuyết minh gần POI" : "Bật tự phát thuyết minh gần POI"
+                      : autoNarrationEnabled ? "Disable proximity narration" : "Enable proximity narration"
+                  }
+                >
+                  {language === "vi"
+                    ? autoNarrationEnabled ? "Tự phát: Bật" : "Bật tự phát"
+                    : autoNarrationEnabled ? "Auto: On" : "Auto-play"}
+                </button>
+
+                <button
                   className="round-button"
                   onClick={toggleAudio}
                   disabled={selected?.translationMissing}
@@ -875,173 +1001,33 @@ function MapApp({ language, onChangeLanguage, onOpenLanguageSelection }) {
               </div>
             </aside>
 
-            <div className="map-panel">
-              <MapContainer
-                center={mapCenter}
-                zoom={16}
-                scrollWheelZoom
-                className="leaflet-map"
-              >
-                <TileLayer
-                  attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-                  url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                />
-
-                {places.map((place) => (
-                  <CircleMarker
-                    key={place.id}
-                    center={place.position}
-                    radius={selected?.id === place.id ? 11 : 7}
-                    pathOptions={{
-                      color: selected?.id === place.id ? "#ffffff" : "#216b50",
-                      fillColor:
-                        selected?.id === place.id ? "#c49a55" : "#216b50",
-                      fillOpacity: 1,
-                      weight: 3,
-                    }}
-                    eventHandlers={{
-                      click: () => setSelected(place),
-                    }}
-                  >
-                    <Popup>
-                      <strong>{place.name}</strong>
-                      <br />
-                      {place.category}
-                      <br />
-                      <button onClick={() => setSelected(place)}>
-                        {text.start}
-                      </button>
-                    </Popup>
-                  </CircleMarker>
-                ))}
-
-                {position && (
-                  <CircleMarker
-                    center={position}
-                    radius={9}
-                    pathOptions={{
-                      color: "#ffffff",
-                      fillColor: "#2674e8",
-                      fillOpacity: 1,
-                      weight: 3,
-                    }}
-                  >
-                    <Popup>{text.currentPosition}</Popup>
-                  </CircleMarker>
-                )}
-
-                {route?.coordinates && (
-                  <Polyline
-                    positions={route.coordinates}
-                    pathOptions={{ color: "#2674e8", weight: 6, opacity: 0.85 }}
-                  />
-                )}
-
-                <MapController
-                  place={selected}
-                  userPosition={position}
-                  route={route}
-                />
-              </MapContainer>
-
-              <div className="map-label">
-                <MapPin size={16} />
-                <span>{text.mapLabel}</span>
-              </div>
-
-              {(routeLoading || route || routeError) && (
-                <div className="map-route-status" role="status">
-                  {routeLoading
-                    ? language === "vi"
-                      ? "Đang tìm đường đi…"
-                      : "Finding route…"
-                    : route
-                      ? `${language === "vi" ? "Tuyến đường" : "Route"}: ${(route.distance / 1000).toFixed(1)} km · ${Math.max(1, Math.round(route.duration / 60))} min`
-                      : routeError}
-                </div>
-              )}
-
-              <button
-                className="map-locate"
-                onClick={locateMe}
-                aria-label={text.myLocation}
-              >
-                <LocateFixed size={19} />
-              </button>
-            </div>
-          </div>
-        </section>
-
-        <section className="detail-section">
-          <div className="detail-image">
-            <img
-              className="detail-image-photo"
-              src={resolveImageUrl(selected?.imageUrl) || "/Chùa-Linh-Ứng-Bãi-Bụt1.jpg"}
-              alt={selected?.name || text.category}
-              onError={(event) => {
-                event.currentTarget.style.display = "none";
-              }}
+            <MapView
+              places={places}
+              selected={selected}
+              onSelect={setSelected}
+              position={position}
+              route={route}
+              mapCenter={mapCenter}
+              text={text}
+              language={language}
+              routeLoading={routeLoading}
+              routeError={routeError}
+              onLocate={locateMe}
             />
-            <div className="detail-image-overlay">
-              <span>{text.currentPlace}</span>
-              <h2>{selected?.name || text.category}</h2>
-            </div>
-          </div>
-
-          <div className="detail-content">
-            <span className="eyebrow">{text.detailKicker}</span>
-
-            <h2>{selected?.name || text.category}</h2>
-
-            <span className="category-tag">
-              {selected?.category || text.category}
-            </span>
-
-            <p>{selected?.description || text.fallback}</p>
-
-            <div className="detail-actions">
-              <button
-                className="outline-button"
-                onClick={openDirections}
-                disabled={!selected}
-              >
-                <Navigation size={18} />
-                {routeLoading
-                  ? language === "vi"
-                    ? "Đang tìm đường…"
-                    : "Finding route…"
-                  : language === "vi"
-                    ? "Chỉ đường trên bản đồ"
-                    : "Show route on map"}
-              </button>
-
-              <button
-                className="primary-button"
-                onClick={toggleAudio}
-                disabled={selected?.translationMissing}
-              >
-                <Headphones size={18} />
-                {audioLoading
-                  ? text.creatingVoice
-                  : playing
-                    ? text.stopNarration
-                    : text.playNarration}
-              </button>
-
-              <button
-                className="outline-button"
-                onClick={() => setChatOpen(true)}
-              >
-                <MessageCircle size={18} />
-                {text.askGuide}
-              </button>
-            </div>
-
-            <p className="demo-note">
-              {selected ? text.fromBackend : text.noPlaces}
-            </p>
           </div>
         </section>
+
+        <PoiDetail
+          place={selected}
+          text={text}
+          language={language}
+          routeLoading={routeLoading}
+          onDirections={openDirections}
+          onToggleAudio={toggleAudio}
+          audioLoading={audioLoading}
+          playing={playing}
+          onAskGuide={() => setChatOpen(true)}
+        />
       </main>
 
       <footer className="footer">
@@ -1052,83 +1038,19 @@ function MapApp({ language, onChangeLanguage, onOpenLanguageSelection }) {
         <span>{text.footer}</span>
       </footer>
 
-      <button
-        className="chat-fab"
-        onClick={() => setChatOpen((open) => !open)}
-        aria-label={chatOpen ? "×" : text.chatbot}
-      >
-        {chatOpen ? <Menu size={23} /> : <MessageCircle size={23} />}
-      </button>
-
-      {chatOpen && (
-        <section className="chat-window">
-          <div className="chat-header">
-            <span className="chat-avatar">🪷</span>
-
-            <div>
-              <strong>{text.chatbot}</strong>
-              <small>{text.chatbotDemo}</small>
-            </div>
-
-            <button
-              onClick={() => setChatOpen(false)}
-              aria-label={text.chatbot}
-            >
-              ✕
-            </button>
-          </div>
-
-          <div className="chat-body">
-            <p className="chat-bubble">
-              {text.chatGreeting} {selected?.name || text.category}?
-            </p>
-
-            {chatMessages.map((message) => (
-              <div
-                className={`chat-message ${
-                  message.role === "user" ? "chat-message-user" : ""
-                }`}
-                key={message.id}
-              >
-                <p
-                  className={`chat-bubble ${
-                    message.role === "user" ? "chat-bubble-user" : ""
-                  } ${message.isError ? "chat-error" : ""}`}
-                  role={message.isError ? "alert" : undefined}
-                  aria-live={message.role === "assistant" ? "polite" : undefined}
-                >
-                  {message.content}
-                </p>
-                {message.sources?.length > 0 && (
-                  <p className="chat-sources">
-                    {text.chatSource}: {message.sources.join(", ")}
-                  </p>
-                )}
-              </div>
-            ))}
-            {chatLoading && (
-              <p className="chat-bubble" role="status">
-                {text.chatLoading}
-              </p>
-            )}
-            <div ref={chatEndRef} aria-hidden="true" />
-          </div>
-
-          <form className="chat-form" onSubmit={askQuestion}>
-            <input
-              value={question}
-              onChange={(event) => setQuestion(event.target.value)}
-              placeholder={text.chatPlaceholder}
-              aria-label={text.chatPlaceholder}
-              disabled={chatLoading}
-            />
-
-            <button type="submit" disabled={chatLoading || !question.trim()}>
-              {chatLoading ? "…" : text.send}
-            </button>
-          </form>
-        </section>
-      )}
+      <Chatbot
+        open={chatOpen}
+        onToggle={() => setChatOpen((open) => !open)}
+        onClose={() => setChatOpen(false)}
+        text={text}
+        selectedPlaceName={selected?.name}
+        messages={chatMessages}
+        loading={chatLoading}
+        endRef={chatEndRef}
+        onSubmit={askQuestion}
+        question={question}
+        onQuestionChange={setQuestion}
+      />
     </div>
   );
 }

@@ -125,7 +125,8 @@ public class PaymentController {
                 .sum();
         return Map.of(
                 "totalIncome", totalIncome,
-                "paidTransactions", (long) paidTransactions.size());
+                "paidTransactions", (long) paidTransactions.size(),
+                "failedTransactions", paymentRepository.countByStatus("FAILED"));
     }
 
     // Tra cứu trạng thái giao dịch

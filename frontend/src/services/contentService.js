@@ -22,12 +22,14 @@ export async function uploadPoiImage(file, token) {
   });
 
   const text = await response.text();
-  let data = {};
-  try {
-    data = text ? JSON.parse(text) : {};
-  } catch {
-    data = { message: text };
-  }
+  const data = (() => {
+    if (!text) return {};
+    try {
+      return JSON.parse(text);
+    } catch {
+      return { message: text };
+    }
+  })();
 
   if (!response.ok || !data.imageUrl) {
     throw new Error(

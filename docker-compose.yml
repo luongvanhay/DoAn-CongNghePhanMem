@@ -36,6 +36,10 @@ services:
       context: ./services/tts-service
     ports:
       - "3003:3003"
+    environment:
+      - TTS_AUDIO_DIR=/app/audio
+    volumes:
+      - ./database/audio:/app/audio:ro
 
   content-service:
     build:
@@ -62,7 +66,7 @@ services:
       - mongodb
     restart: always
     volumes:
-      - poi_images:/app/uploads/poi
+      - ./services/content-service/uploads/poi:/app/uploads/poi
 
   translation-service:
     build:
@@ -85,4 +89,3 @@ services:
 
 volumes:
   mongo_data:
-  poi_images:

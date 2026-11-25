@@ -16,6 +16,8 @@ public interface PaymentTransactionRepository
 
     List<PaymentTransaction> findByStatus(String status);
 
+    long countByStatus(String status);
+
     List<PaymentTransaction> findByMethodOrderByCreatedAtDesc(String method);
 
     Optional<PaymentTransaction> findFirstBySessionIdAndStatusAndAccessGranted(

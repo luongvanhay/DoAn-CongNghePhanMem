@@ -37,6 +37,11 @@ public class AuthController {
         this.jwtService = jwtService;
     }
 
+    @GetMapping("/health")
+    public Map<String, String> health() {
+        return Map.of("service", "auth-service", "status", "ok");
+    }
+
     @GetMapping(value = "/", produces = "text/plain;charset=UTF-8")
     public String hello() {
         return "Auth Service đang hoạt động!";
