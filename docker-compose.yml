@@ -25,6 +25,7 @@ services:
     environment:
       - JWT_SECRET=${JWT_SECRET}
       - MONGODB_URI=mongodb://mongodb:27017/auth_db
+      - ADMIN_EMAIL=${ADMIN_EMAIL:-}
       - ADMIN_USERNAME=${ADMIN_USERNAME:-}
       - ADMIN_PASSWORD=${ADMIN_PASSWORD:-}
       - INTERNAL_API_SECRET=${INTERNAL_API_SECRET}

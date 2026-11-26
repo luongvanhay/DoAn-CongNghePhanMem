@@ -75,7 +75,7 @@ function StatCard({ icon, label, value, hint, tone }) {
 
 function AdminLogin({ onLogin }) {
   // Lưu tên đăng nhập, mật khẩu và trạng thái gửi biểu mẫu
-  const [username, setUsername] = useState("");
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -87,6 +87,11 @@ function AdminLogin({ onLogin }) {
     event.preventDefault();
 
     setError("");
+    const normalizedEmail = email.trim().toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
+      setError("Vui lòng nhập địa chỉ email hợp lệ.");
+      return;
+    }
     setLoading(true);
 
     try {
@@ -97,7 +102,7 @@ function AdminLogin({ onLogin }) {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          username: username.trim(),
+          email: normalizedEmail,
           password,
         }),
       });
@@ -165,16 +170,16 @@ function AdminLogin({ onLogin }) {
 
           <form className="login-form" onSubmit={handleSubmit}>
             <div className="login-field">
-              <label htmlFor="admin-username">Tên tài khoản</label>
+              <label htmlFor="admin-email">Email quản trị</label>
               <div className="login-input-wrap">
                 <UserRound size={19} aria-hidden="true" />
                 <input
-                  id="admin-username"
-                  type="text"
-                  placeholder="Nhập tên tài khoản"
-                  autoComplete="username"
-                  value={username}
-                  onChange={(event) => setUsername(event.target.value)}
+                  id="admin-email"
+                  type="email"
+                  placeholder="admin@example.com"
+                  autoComplete="email"
+                  value={email}
+                  onChange={(event) => setEmail(event.target.value)}
                   disabled={loading}
                   required
                 />

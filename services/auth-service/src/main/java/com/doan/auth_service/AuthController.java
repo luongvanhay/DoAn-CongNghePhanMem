@@ -109,6 +109,23 @@ public class AuthController {
     public ResponseEntity<Map<String, String>> login(
             @RequestBody LoginRequest request) {
 
+        String loginEmail = request.getEmail();
+        if (loginEmail != null && !loginEmail.isBlank()) {
+            String normalizedEmail = loginEmail.trim().toLowerCase();
+            if (!normalizedEmail.matches("^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$")) {
+                return ResponseEntity.badRequest().body(Map.of("message", "Nhập địa chỉ email hợp lệ."));
+            }
+            return userRepository.findByEmailIgnoreCase(normalizedEmail)
+                    .filter(user -> user.getRole() == User.Role.ADMIN)
+                    .filter(user -> passwordEncoder.matches(request.getPassword(), user.getPassword()))
+                    .filter(user -> user.getStatus() == User.AccountStatus.ACTIVE)
+                    .map(user -> {
+                        String token = jwtService.generateToken(user.getId(), user.getUsername(), user.getRole().name());
+                        return ResponseEntity.ok(Map.of("message", "Đăng nhập thành công", "id", user.getId(),
+                                "username", user.getUsername(), "email", user.getEmail(), "role", user.getRole().name(), "token", token));
+                    }).orElseGet(() -> ResponseEntity.status(401).body(Map.of("message", "Email chưa được cấp quyền Admin hoặc mật khẩu không đúng.")));
+        }
+
         if (request.getUsername() == null
                 || request.getUsername().isBlank()
                 || request.getPassword() == null

@@ -18,23 +18,23 @@ public class AdminBootstrapRunner implements ApplicationRunner {
 
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
-    private final String username;
+    private final String email;
     private final String password;
 
     public AdminBootstrapRunner(
             UserRepository userRepository,
             PasswordEncoder passwordEncoder,
-            @Value("${app.bootstrap-admin.username:}") String username,
+            @Value("${app.bootstrap-admin.email:${app.bootstrap-admin.username:}}") String email,
             @Value("${app.bootstrap-admin.password:}") String password) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
-        this.username = username;
+        this.email = email;
         this.password = password;
     }
 
     @Override
     public void run(ApplicationArguments args) {
-        boolean usernameProvided = username != null && !username.isBlank();
+        boolean usernameProvided = email != null && !email.isBlank();
         boolean passwordProvided = password != null && !password.isBlank();
 
         if (!usernameProvided && !passwordProvided) {
@@ -46,13 +46,14 @@ public class AdminBootstrapRunner implements ApplicationRunner {
                     "Cần cấu hình cả ADMIN_USERNAME và ADMIN_PASSWORD để tạo Admin ban đầu");
         }
 
-        String normalizedUsername = username.trim();
+        String normalizedUsername = email.trim();
         if (password.length() < 8) {
             throw new IllegalStateException(
                     "ADMIN_PASSWORD phải có ít nhất 8 ký tự");
         }
 
-        if (userRepository.existsByUsername(normalizedUsername)) {
+        if (userRepository.findByEmailIgnoreCase(normalizedUsername).isPresent()
+                || userRepository.existsByUsername(normalizedUsername)) {
             logger.info(
                     "Không tạo Admin bootstrap vì username '{}' đã tồn tại",
                     normalizedUsername);
@@ -63,6 +64,7 @@ public class AdminBootstrapRunner implements ApplicationRunner {
                 normalizedUsername,
                 passwordEncoder.encode(password),
                 User.Role.ADMIN);
+        admin.setEmail(normalizedUsername.toLowerCase());
         userRepository.save(admin);
         logger.info(
                 "Đã tạo tài khoản Admin bootstrap '{}'",
