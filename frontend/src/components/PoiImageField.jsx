@@ -8,26 +8,29 @@ export default function PoiImageField({
   onImageUrlChange,
 }) {
   const inputRef = useRef(null);
-  const [previewUrl, setPreviewUrl] = useState("");
-  const [previewFailed, setPreviewFailed] = useState(false);
+  const imageRef = useRef(null);
+  const [failedImageKey, setFailedImageKey] = useState(null);
+  const displayedImage = resolveImageUrl(imageUrl);
+  const currentImageKey = file || displayedImage;
+  const previewFailed = currentImageKey === failedImageKey;
 
   useEffect(() => {
     if (!file) {
-      setPreviewUrl("");
       if (inputRef.current) inputRef.current.value = "";
+      if (imageRef.current) {
+        if (displayedImage) imageRef.current.src = displayedImage;
+        else imageRef.current.removeAttribute("src");
+      }
       return undefined;
     }
 
     const objectUrl = URL.createObjectURL(file);
-    setPreviewUrl(objectUrl);
+    if (imageRef.current) {
+      imageRef.current.src = objectUrl;
+      imageRef.current.hidden = false;
+    }
     return () => URL.revokeObjectURL(objectUrl);
-  }, [file]);
-
-  const displayedImage = previewUrl || resolveImageUrl(imageUrl);
-
-  useEffect(() => {
-    setPreviewFailed(false);
-  }, [displayedImage]);
+  }, [file, displayedImage]);
 
   return (
     <div className="poi-image-field">
@@ -43,13 +46,14 @@ export default function PoiImageField({
       <p className="poi-image-help">
         Chọn ảnh JPEG hoặc PNG, tối đa 8 MB. Ảnh được lưu cùng dữ liệu địa điểm.
       </p>
-      {displayedImage && (
+      {(displayedImage || file) && (
         <img
+          ref={imageRef}
           className="poi-image-preview"
-          src={displayedImage}
+          src={displayedImage || undefined}
           alt="Xem trước ảnh địa điểm"
           hidden={previewFailed}
-          onError={() => setPreviewFailed(true)}
+          onError={() => setFailedImageKey(currentImageKey)}
         />
       )}
       <label className="poi-image-url-label">
