@@ -232,6 +232,8 @@ function MapApp({ language, onChangeLanguage, onOpenLanguageSelection }) {
   const [route, setRoute] = useState(null);
   const [routeLoading, setRouteLoading] = useState(false);
   const [routeError, setRouteError] = useState("");
+  const [routeFromId, setRouteFromId] = useState("");
+  const [routeToId, setRouteToId] = useState("");
 
   const places = localizedPlaces;
   const selected = useMemo(
@@ -247,7 +249,7 @@ function MapApp({ language, onChangeLanguage, onOpenLanguageSelection }) {
       setRouteError("");
     }, 0);
     return () => window.clearTimeout(timerId);
-  }, [selected?.id]);
+  }, [selected?.id, routeFromId, routeToId]);
   const [query, setQuery] = useState("");
   const [position, setPosition] = useState(null);
   const [gpsMessage, setGpsMessage] = useState("");
@@ -349,6 +351,8 @@ function MapApp({ language, onChangeLanguage, onOpenLanguageSelection }) {
 
         if (!cancelled) {
           setLocalizedPlaces(localized);
+          setRouteFromId((current) => current || localized[0]?.id || "");
+          setRouteToId((current) => current || localized[1]?.id || localized[0]?.id || "");
 
           setSelected((current) => {
             if (localized.length === 0) {
@@ -442,55 +446,39 @@ function MapApp({ language, onChangeLanguage, onOpenLanguageSelection }) {
   }
 
   function openDirections() {
-    if (!selected) {
-      setGpsMessage(text.noPlaces);
+    const fromPlace = places.find((place) => place.id === routeFromId);
+    const toPlace = places.find((place) => place.id === routeToId);
+    if (!fromPlace || !toPlace) {
+      setRouteError(language === "vi" ? "H\u00e3y ch\u1ecdn \u0111i\u1ec3m \u0111i v\u00e0 \u0111i\u1ec3m \u0111\u1ebfn." : "Choose a start and destination.");
       return;
     }
-
-    if (!position) {
-      setRouteError(
-        language === "vi"
-          ? "Hãy bật định vị để xem đường đi từ vị trí hiện tại."
-          : "Enable location to see a route from your current position.",
-      );
-      locateMe();
+    if (fromPlace.id === toPlace.id) {
+      setRouteError(language === "vi" ? "\u0110i\u1ec3m \u0111i v\u00e0 \u0111i\u1ec3m \u0111\u1ebfn ph\u1ea3i kh\u00e1c nhau." : "Start and destination must be different.");
       return;
     }
 
     setRoute(null);
     setRouteError("");
     setRouteLoading(true);
-    const [fromLat, fromLng] = position;
-    const [toLat, toLng] = selected.position;
+    const [fromLat, fromLng] = fromPlace.position;
+    const [toLat, toLng] = toPlace.position;
     fetch(
       `https://router.project-osrm.org/route/v1/driving/${fromLng},${fromLat};${toLng},${toLat}?overview=full&geometries=geojson`,
     )
       .then(async (response) => {
         const data = await response.json();
         if (!response.ok || data.code !== "Ok" || !data.routes?.length) {
-          throw new Error(
-            language === "vi"
-              ? "Không tìm thấy tuyến đường."
-              : "No route found.",
-          );
+          throw new Error(language === "vi" ? "Kh\u00f4ng t\u00ecm th\u1ea5y tuy\u1ebfn \u0111\u01b0\u1eddng." : "No route found.");
         }
         const bestRoute = data.routes[0];
         setRoute({
-          coordinates: bestRoute.geometry.coordinates.map(([lng, lat]) => [
-            lat,
-            lng,
-          ]),
+          coordinates: bestRoute.geometry.coordinates.map(([lng, lat]) => [lat, lng]),
           distance: bestRoute.distance,
           duration: bestRoute.duration,
         });
       })
       .catch((error) =>
-        setRouteError(
-          error.message ||
-            (language === "vi"
-              ? "Không thể tải tuyến đường."
-              : "Could not load route."),
-        ),
+        setRouteError(error.message || (language === "vi" ? "Kh\u00f4ng th\u1ec3 t\u1ea3i tuy\u1ebfn \u0111\u01b0\u1eddng." : "Could not load route.")),
       )
       .finally(() => setRouteLoading(false));
   }
@@ -819,6 +807,24 @@ function MapApp({ language, onChangeLanguage, onOpenLanguageSelection }) {
               <div className="places-count">
                 {text.placesList}
                 <span>{filteredPlaces.length}</span>
+              </div>
+
+              <div className="route-place-selectors">
+                <label>
+                  {language === "vi" ? "\u0110i\u1ec3m \u0111i" : "Start"}
+                  <select value={routeFromId} onChange={(event) => setRouteFromId(event.target.value)}>
+                    {places.map((place) => <option key={place.id} value={place.id}>{place.name}</option>)}
+                  </select>
+                </label>
+                <label>
+                  {language === "vi" ? "\u0110i\u1ec3m \u0111\u1ebfn" : "Destination"}
+                  <select value={routeToId} onChange={(event) => setRouteToId(event.target.value)}>
+                    {places.map((place) => <option key={place.id} value={place.id}>{place.name}</option>)}
+                  </select>
+                </label>
+                <button type="button" className="outline-button" onClick={openDirections} disabled={places.length < 2 || routeLoading}>
+                  <Navigation size={16} /> {language === "vi" ? "T\u00ednh \u0111\u01b0\u1eddng v\u00e0 kho\u1ea3ng c\u00e1ch" : "Find route and distance"}
+                </button>
               </div>
 
               <div className="place-list">
