@@ -8,26 +8,23 @@ export default function PoiImageField({
   onImageUrlChange,
 }) {
   const inputRef = useRef(null);
-  const [previewUrl, setPreviewUrl] = useState("");
-  const [previewFailed, setPreviewFailed] = useState(false);
+  const [preview, setPreview] = useState(null);
+  const [failedImage, setFailedImage] = useState("");
 
   useEffect(() => {
     if (!file) {
-      setPreviewUrl("");
       if (inputRef.current) inputRef.current.value = "";
       return undefined;
     }
 
     const objectUrl = URL.createObjectURL(file);
-    setPreviewUrl(objectUrl);
+    setPreview({ file, url: objectUrl });
     return () => URL.revokeObjectURL(objectUrl);
   }, [file]);
 
+  const previewUrl = preview?.file === file ? preview.url : "";
   const displayedImage = previewUrl || resolveImageUrl(imageUrl);
-
-  useEffect(() => {
-    setPreviewFailed(false);
-  }, [displayedImage]);
+  const previewFailed = failedImage === displayedImage;
 
   return (
     <div className="poi-image-field">
@@ -49,7 +46,7 @@ export default function PoiImageField({
           src={displayedImage}
           alt="Xem trước ảnh địa điểm"
           hidden={previewFailed}
-          onError={() => setPreviewFailed(true)}
+          onError={() => setFailedImage(displayedImage)}
         />
       )}
       <label className="poi-image-url-label">
