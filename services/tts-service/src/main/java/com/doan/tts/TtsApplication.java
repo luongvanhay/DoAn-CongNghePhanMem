@@ -20,6 +20,10 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import org.springframework.beans.factory.annotation.Value;
 
 @SpringBootApplication
 @RestController
@@ -28,6 +32,9 @@ public class TtsApplication {
     private static final int MAX_CHUNK_CHARACTERS = 180;
     private static final int MAX_TEXT_CHARACTERS = 5000;
 
+    @Value("${tts.audio-dir:./audio}")
+    private String audioDirectory;
+
     private final HttpClient httpClient = HttpClient.newBuilder()
             .followRedirects(HttpClient.Redirect.NORMAL)
             .connectTimeout(Duration.ofSeconds(10))
@@ -35,6 +42,11 @@ public class TtsApplication {
 
     public static void main(String[] args) {
         SpringApplication.run(TtsApplication.class, args);
+    }
+
+    @GetMapping("/health")
+    public Map<String, String> health() {
+        return Map.of("service", "tts-service", "status", "ok");
     }
 
     @PostMapping(
@@ -57,6 +69,23 @@ public class TtsApplication {
         if (!lang.matches("[a-zA-Z-]{2,10}")) {
             throw new ResponseStatusException(
                     HttpStatus.BAD_REQUEST, "Mã ngôn ngữ không hợp lệ");
+        }
+
+        String placeId = payload.get("placeId");
+        if (placeId != null && placeId.matches("[a-zA-Z0-9_-]{1,100}")) {
+            Path audioRoot = Paths.get(audioDirectory).toAbsolutePath().normalize();
+            Path preparedAudio = audioRoot.resolve(placeId + "-" + lang + ".mp3").normalize();
+            if (preparedAudio.startsWith(audioRoot) && Files.isRegularFile(preparedAudio)) {
+                try {
+                    return ResponseEntity.ok()
+                            .contentType(MediaType.parseMediaType("audio/mpeg"))
+                            .body(Files.readAllBytes(preparedAudio));
+                } catch (IOException e) {
+                    throw new ResponseStatusException(
+                            HttpStatus.INTERNAL_SERVER_ERROR,
+                            "Không thể đọc tệp thuyết minh đã chuẩn bị", e);
+                }
+            }
         }
 
         try {

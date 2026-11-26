@@ -1,13 +1,23 @@
 import { useCallback, useEffect, useState } from "react";
-import { NavLink, useLocation } from "react-router-dom";
+import { Link, NavLink, useLocation } from "react-router-dom";
+import {
+  Eye,
+  EyeOff,
+  LockKeyhole,
+  MapPin,
+  ShieldCheck,
+  UserRound,
+} from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 import { languages } from "../../i18n";
 import PoiImageField from "../../components/PoiImageField.jsx";
 import { uploadPoiImage } from "../../services/contentService.js";
+import "../Auth/LoginPage.css";
 import "./AdminDashboard.css";
 import CashPaymentManager from "./CashPaymentManager.jsx";
 import { formatNumber, readResponse } from "./adminUtils.js";
 import UserAccountManager from "./UserAccountManager.jsx";
+import MonitoringDashboard from "./MonitoringDashboard.jsx";
 
 // ==================== CẤU HÌNH API ====================
 
@@ -67,6 +77,7 @@ function AdminLogin({ onLogin }) {
   // Lưu tên đăng nhập, mật khẩu và trạng thái gửi biểu mẫu
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -112,119 +123,109 @@ function AdminLogin({ onLogin }) {
   }
 
   return (
-    <main
-      style={{
-        minHeight: "100vh",
-        display: "grid",
-        placeItems: "center",
-        padding: 20,
-        background: "#fff",
-      }}
-    >
-      <form
-        onSubmit={handleSubmit}
-        style={{
-          width: "100%",
-          maxWidth: 420,
-          padding: 30,
-          border: "1px solid #e7ece9",
-          borderRadius: 18,
-          background: "#fff",
-          boxShadow: "0 16px 44px #12351f10",
-        }}
-      >
-        {/* Logo và tiêu đề trang đăng nhập */}
-        <div className="admin-brand-mark" style={{ marginBottom: 20 }}>
-          D
+    <main className="login-page">
+      <section className="login-visual">
+        <div className="login-brand">
+          <span className="brand-icon">
+            <ShieldCheck size={24} />
+          </span>
+          <span>VietPlace</span>
         </div>
 
-        <p className="admin-eyebrow">DOAN CMS</p>
-
-        <h1 style={{ margin: "0 0 8px", fontSize: 25 }}>Đăng nhập quản trị</h1>
-
-        <p className="admin-subtitle" style={{ marginBottom: 24 }}>
-          Đăng nhập bằng tài khoản có quyền ADMIN.
-        </p>
-
-        {/* Ô nhập tên đăng nhập */}
-        <label
-          htmlFor="admin-username"
-          style={{ display: "block", marginBottom: 7, fontSize: 12 }}
-        >
-          Tên đăng nhập
-        </label>
-
-        <input
-          id="admin-username"
-          autoComplete="username"
-          value={username}
-          onChange={(event) => setUsername(event.target.value)}
-          required
-          style={loginInputStyle}
-        />
-
-        {/* Ô nhập mật khẩu */}
-        <label
-          htmlFor="admin-password"
-          style={{
-            display: "block",
-            margin: "16px 0 7px",
-            fontSize: 12,
-          }}
-        >
-          Mật khẩu
-        </label>
-
-        <input
-          id="admin-password"
-          type="password"
-          autoComplete="current-password"
-          value={password}
-          onChange={(event) => setPassword(event.target.value)}
-          required
-          style={loginInputStyle}
-        />
-
-        {/* Hiển thị lỗi nếu đăng nhập không thành công */}
-        {error && (
-          <p role="alert" className="admin-poi-message error">
-            {error}
+        <div className="login-hero">
+          <span className="login-eyebrow">KHÔNG GIAN QUẢN TRỊ</span>
+          <h1>Điều hành hành trình khám phá.</h1>
+          <p>
+            Quản lý địa điểm, nội dung thuyết minh và hoạt động tham quan trên
+            hệ thống VietPlace.
           </p>
-        )}
+        </div>
 
-        {/* Khóa nút trong lúc gửi yêu cầu đăng nhập */}
-        <button
-          type="submit"
-          disabled={loading}
-          style={{
-            width: "100%",
-            marginTop: 20,
-            padding: 13,
-            border: 0,
-            borderRadius: 10,
-            background: "#267456",
-            color: "#fff",
-            fontWeight: 700,
-            cursor: loading ? "wait" : "pointer",
-          }}
-        >
-          {loading ? "Đang đăng nhập..." : "Đăng nhập"}
-        </button>
-      </form>
+        <div className="login-visual-footer">
+          VietPlace · Trang quản trị hệ thống
+        </div>
+      </section>
+
+      <section className="login-form-section">
+        <div className="login-form-container">
+          <Link to="/" className="login-back-link">
+            ← Quay lại trang chủ
+          </Link>
+
+          <div className="login-mobile-brand">
+            <MapPin size={24} />
+            <span>VietPlace</span>
+          </div>
+
+          <div className="login-heading">
+            <span className="login-small-label">ĐĂNG NHẬP AN TOÀN</span>
+            <h2>Quản trị viên</h2>
+            <p>Đăng nhập bằng tài khoản được cấp quyền ADMIN.</p>
+          </div>
+
+          <form className="login-form" onSubmit={handleSubmit}>
+            <div className="login-field">
+              <label htmlFor="admin-username">Tên tài khoản</label>
+              <div className="login-input-wrap">
+                <UserRound size={19} aria-hidden="true" />
+                <input
+                  id="admin-username"
+                  type="text"
+                  placeholder="Nhập tên tài khoản"
+                  autoComplete="username"
+                  value={username}
+                  onChange={(event) => setUsername(event.target.value)}
+                  disabled={loading}
+                  required
+                />
+              </div>
+            </div>
+
+            <div className="login-field">
+              <label htmlFor="admin-password">Mật khẩu</label>
+              <div className="login-input-wrap">
+                <LockKeyhole size={19} aria-hidden="true" />
+                <input
+                  id="admin-password"
+                  type={showPassword ? "text" : "password"}
+                  placeholder="Nhập mật khẩu"
+                  autoComplete="current-password"
+                  value={password}
+                  onChange={(event) => setPassword(event.target.value)}
+                  disabled={loading}
+                  required
+                />
+                <button
+                  type="button"
+                  className="login-password-toggle"
+                  onClick={() => setShowPassword((value) => !value)}
+                  aria-label={showPassword ? "Ẩn mật khẩu" : "Hiện mật khẩu"}
+                >
+                  {showPassword ? <EyeOff size={19} /> : <Eye size={19} />}
+                </button>
+              </div>
+            </div>
+
+            {error && (
+              <div className="login-error" role="alert">
+                {error}
+              </div>
+            )}
+
+            <button type="submit" className="login-submit" disabled={loading}>
+              {loading ? "Đang đăng nhập..." : "Đăng nhập Admin"}
+            </button>
+          </form>
+
+          <p className="login-security-note">
+            <LockKeyhole size={14} aria-hidden="true" />
+            Chỉ tài khoản có quyền ADMIN mới truy cập được trang này.
+          </p>
+        </div>
+      </section>
     </main>
   );
 }
-
-// CSS dùng chung cho hai ô nhập trên form đăng nhập
-const loginInputStyle = {
-  width: "100%",
-  padding: "12px 13px",
-  border: "1px solid #e1e2ed",
-  borderRadius: 9,
-  font: "inherit",
-  fontSize: 13,
-  outlineColor: "#7968e7",
-};
 
 // ==================== QUẢN LÝ HỒ SƠ POI ====================
 
@@ -1197,6 +1198,7 @@ export default function AdminDashboard() {
   const currentPage = routePage === "staff" ? "users" : routePage;
   const pageTitles = {
     dashboard: "Bảng điều khiển",
+    monitoring: "Giám sát hệ thống",
     visits: "Thống kê truy cập",
     payments: "Giao dịch thanh toán",
     "poi-owners": "Duyệt hồ sơ POI",
@@ -1401,6 +1403,16 @@ export default function AdminDashboard() {
           </NavLink>
 
           <NavLink
+            to="/admin/monitoring"
+            className={({ isActive }) =>
+              `admin-nav-item${isActive ? " active" : ""}`
+            }
+          >
+            <span className="admin-nav-symbol">◉</span>
+            Giám sát hệ thống
+          </NavLink>
+
+          <NavLink
             to="/admin/visits"
             className={({ isActive }) =>
               `admin-nav-item${isActive ? " active" : ""}`
@@ -1489,6 +1501,8 @@ export default function AdminDashboard() {
             </div>
           </div>
         </header>
+
+        {currentPage === "monitoring" && <MonitoringDashboard token={token} />}
 
         {/* Tiêu đề trang và nút tải lại thống kê */}
         {currentPage === "dashboard" && (

@@ -452,6 +452,50 @@
   font-size: 11px;
 }
 
+.foreign-currency-fields {
+  display: grid;
+  grid-template-columns: 1fr 1fr auto;
+  gap: 10px;
+  align-items: end;
+  margin: 14px 0;
+  padding: 14px;
+  border: 1px solid #e3e9f1;
+  border-radius: 12px;
+  background: #f8fafc;
+}
+
+.foreign-currency-fields label {
+  display: grid;
+  gap: 5px;
+  color: #475569;
+  font-size: 12px;
+}
+
+.foreign-currency-fields select,
+.foreign-currency-fields input,
+.foreign-currency-fields button {
+  min-height: 40px;
+  padding: 8px 10px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  background: #fff;
+  font: inherit;
+}
+
+.foreign-currency-fields button {
+  color: #fff;
+  border-color: #176b52;
+  background: #176b52;
+  cursor: pointer;
+}
+
+.foreign-currency-fields p {
+  grid-column: 1 / -1;
+  margin: 0;
+  color: #176b52;
+  font-size: 13px;
+}
+
 @media (max-width: 600px) {
   .payment-header {
     min-height: 54px;
@@ -492,5 +536,13 @@
 
   .payment-qr-frame svg {
     width: min(228px, 65vw);
+  }
+
+  .foreign-currency-fields {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .foreign-currency-fields button {
+    grid-column: 1 / -1;
   }
 }

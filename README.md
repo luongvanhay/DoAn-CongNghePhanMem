@@ -33,8 +33,9 @@ Yêu cầu: Docker Desktop đang chạy và Node.js/npm đã được cài đặ
    nhưng dữ liệu phát sinh sau đó được lưu riêng trên máy mỗi người.
 
 Admin và chủ địa điểm đã được xác minh có thể chọn ảnh JPEG/PNG tối đa 8 MB khi
-thêm hoặc sửa POI. Ảnh được lưu trong Docker volume `poi_images` và được phục vụ
-qua API của ứng dụng; giữ volume này khi sao lưu dữ liệu địa điểm có ảnh đã tải lên.
+thêm hoặc sửa POI. Ảnh nằm trong `services/content-service/uploads/poi` trên máy
+chạy ứng dụng; Docker Compose gắn thư mục này vào content-service. Sao lưu cả thư
+mục ảnh lẫn MongoDB nếu cần chuyển toàn bộ dữ liệu địa điểm sang máy khác.
 
 Không commit `.env`, mật khẩu, khóa JWT, khóa tích hợp hoặc bản sao database có
 dữ liệu người dùng thật. Các giá trị trong `.env.example` chỉ dành cho phát triển
@@ -132,3 +133,17 @@ Sau khi cập nhật cấu hình hoặc mã backend, build lại content-service
 ```powershell
 docker compose up -d --build content-service
 ```
+
+### RAG retrieval limitations
+
+The current retrieval step uses keyword matching across POI titles, locations, bodies,
+and translations, then ranks results by term overlap with a small boost for the selected
+POI. It is a heuristic search, with no embeddings, vector database, or reranker. Questions
+using synonyms, typos, or indirect phrasing may therefore miss relevant content. Results
+also depend on the completeness and quality of POI data. This approach is suitable for the
+current small dataset; evaluate retrieval accuracy on a representative question set before
+considering vector search.
+
+## TTS narration audio
+
+The TTS service checks `database/audio/<poi-id>-<tts-language-code>.mp3` first. Add pre-generated MP3 files using the POI database ID and the TTS code configured in `frontend/src/i18n.js` (for example `64f012ab34cd56ef78901234-vi.mp3` or `64f012ab34cd56ef78901234-zh-CN.mp3`). If no matching file exists, the service falls back to Google Translate TTS. The directory is mounted read-only in Docker Compose. Health endpoints are available at `/health` for the gateway, content, translation, and TTS services, and `/auth/health` for auth-service.

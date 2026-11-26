@@ -574,6 +574,27 @@
   line-height: 1.6;
 }
 
+.auto-narration-toggle {
+  flex: 0 0 auto;
+  max-width: 76px;
+  padding: 7px 8px;
+  border: 1px solid #d9dfd2;
+  border-radius: 9px;
+  background: #fff;
+  color: #50634f;
+  font: inherit;
+  font-size: 8px;
+  font-weight: 700;
+  line-height: 1.3;
+  cursor: pointer;
+}
+
+.auto-narration-toggle.is-enabled {
+  border-color: #315e42;
+  background: #315e42;
+  color: #fff;
+}
+
 .round-button {
   display: grid;
   place-items: center;
