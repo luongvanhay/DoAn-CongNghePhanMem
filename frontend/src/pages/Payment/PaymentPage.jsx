@@ -201,6 +201,10 @@ export default function PaymentPage() {
   );
   const [copyError, setCopyError] = useState("");
   const [translatedMessage, setTranslatedMessage] = useState(null);
+  const [currency, setCurrency] = useState("USD");
+  const [foreignAmount, setForeignAmount] = useState("");
+  const [conversionQuote, setConversionQuote] = useState(null);
+  const [conversionError, setConversionError] = useState("");
 
   const copy =
     language === "vi"
@@ -277,6 +281,32 @@ export default function PaymentPage() {
     return new URLSearchParams(window.location.search).get("source");
   }
 
+  async function convertForeignCurrency() {
+    setConversionError("");
+    setConversionQuote(null);
+    try {
+      const response = await fetch("/api/payments/convert", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ amount: foreignAmount, currency }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(
+          data.message || data.error ||
+            `API quy đổi trả về HTTP ${response.status}. Hãy kiểm tra hoặc khởi động lại content-service.`,
+        );
+      }
+      setConversionQuote(data);
+    } catch (error) {
+      setConversionError(
+        error.message === "Failed to fetch"
+          ? "Không kết nối được API thanh toán. Hãy kiểm tra content-service đang chạy."
+          : error.message,
+      );
+    }
+  }
+
   async function createVnpayPayment() {
     setLoading(true);
     setStatus("ready");
@@ -285,7 +315,8 @@ export default function PaymentPage() {
 
     try {
       const data = await createPaymentRequest({
-        amount: TICKET_PRICE,
+        amount: conversionQuote ? foreignAmount : TICKET_PRICE,
+        currency: conversionQuote ? currency : "VND",
         method: "VNPAY",
         language,
         source: getPaymentSource(),
@@ -581,11 +612,27 @@ export default function PaymentPage() {
                 <div className="payment-action-panel">
                   <p>{copy.onlineAmount}</p>
 
+                  <div className="foreign-currency-fields">
+                    <label>
+                      Currency
+                      <select value={currency} onChange={(event) => { setCurrency(event.target.value); setConversionQuote(null); }} disabled={loading}>
+                        {["USD", "EUR", "GBP", "JPY", "KRW", "AUD", "CAD", "SGD", "THB", "CNY"].map((code) => <option key={code} value={code}>{code}</option>)}
+                      </select>
+                    </label>
+                    <label>
+                      Foreign amount
+                      <input type="number" min="0.01" step="0.01" value={foreignAmount} onChange={(event) => { setForeignAmount(event.target.value); setConversionQuote(null); }} disabled={loading} placeholder="e.g. 5" />
+                    </label>
+                    <button type="button" onClick={convertForeignCurrency} disabled={loading || !foreignAmount}>Convert to VND</button>
+                    {conversionQuote && <p>≈ {Number(conversionQuote.amountVnd).toLocaleString("vi-VN")} ₫ · 1 {currency} = {Number(conversionQuote.rate).toLocaleString("vi-VN")} ₫ · <a href="https://www.exchangerate-api.com" target="_blank" rel="noreferrer">Rates by Exchange Rate API</a>{Number(conversionQuote.amountVnd) < TICKET_PRICE && <><br />Số tiền cần đạt ít nhất 50.000 ₫ để thanh toán.</>}</p>}
+                    {conversionError && <p role="alert">{conversionError}</p>}
+                  </div>
+
                   <button
                     type="button"
                     className="payment-primary-button"
                     onClick={createVnpayPayment}
-                    disabled={loading || copyLoading}
+                    disabled={loading || copyLoading || (Boolean(foreignAmount) && (!conversionQuote || Number(conversionQuote.amountVnd) < TICKET_PRICE))}
                   >
                     {loading ? copy.connectingVnpay : copy.payByVnpay}
                   </button>

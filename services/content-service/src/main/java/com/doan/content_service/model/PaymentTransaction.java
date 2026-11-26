@@ -5,6 +5,7 @@ import org.springframework.data.mongodb.core.index.Indexed;
 import org.springframework.data.mongodb.core.mapping.Document;
 
 import java.time.LocalDateTime;
+import java.math.BigDecimal;
 
 @Document(collection = "payment_transactions")
 public class PaymentTransaction {
@@ -21,6 +22,9 @@ public class PaymentTransaction {
     private String claimCode;
 
     private Long amount;
+    private String currency;
+    private BigDecimal foreignAmount;
+    private BigDecimal exchangeRate;
 
     private String method;
 
@@ -53,6 +57,12 @@ public class PaymentTransaction {
 
     public Long getAmount() { return amount; }
     public void setAmount(Long amount) { this.amount = amount; }
+    public String getCurrency() { return currency; }
+    public void setCurrency(String currency) { this.currency = currency; }
+    public BigDecimal getForeignAmount() { return foreignAmount; }
+    public void setForeignAmount(BigDecimal foreignAmount) { this.foreignAmount = foreignAmount; }
+    public BigDecimal getExchangeRate() { return exchangeRate; }
+    public void setExchangeRate(BigDecimal exchangeRate) { this.exchangeRate = exchangeRate; }
 
     public String getMethod() { return method; }
     public void setMethod(String method) { this.method = method; }

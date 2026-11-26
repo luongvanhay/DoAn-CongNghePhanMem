@@ -4,6 +4,7 @@ package com.doan.content_service.controller;
 import com.doan.content_service.model.PaymentTransaction;
 import com.doan.content_service.repository.PaymentTransactionRepository;
 import com.doan.content_service.service.VnpayService;
+import com.doan.content_service.service.CurrencyConversionService;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
@@ -21,6 +22,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.math.BigDecimal;
 
 @RestController
 @RequestMapping("/payments")
@@ -29,6 +31,7 @@ public class PaymentController {
 
     private final PaymentTransactionRepository paymentRepository;
     private final VnpayService vnpayService;
+    private final CurrencyConversionService currencyConversionService;
     private final SecureRandom random = new SecureRandom();
     private static final long TICKET_PRICE = 50000L;
 
@@ -37,9 +40,33 @@ public class PaymentController {
 
     public PaymentController(
             PaymentTransactionRepository paymentRepository,
-            VnpayService vnpayService) {
+            VnpayService vnpayService,
+            CurrencyConversionService currencyConversionService) {
         this.paymentRepository = paymentRepository;
         this.vnpayService = vnpayService;
+        this.currencyConversionService = currencyConversionService;
+    }
+
+    public PaymentController(PaymentTransactionRepository paymentRepository, VnpayService vnpayService) {
+        this(paymentRepository, vnpayService, new CurrencyConversionService());
+    }
+
+    @PostMapping("/convert")
+    public ResponseEntity<?> convertCurrency(@RequestBody ConvertCurrencyRequest request) {
+        try {
+            CurrencyConversionService.Conversion conversion = currencyConversionService.convert(request.getAmount(), request.getCurrency());
+            Map<String, Object> result = new HashMap<>();
+            result.put("currency", conversion.currency());
+            result.put("foreignAmount", conversion.foreignAmount());
+            result.put("amountVnd", conversion.amountVnd());
+            result.put("rate", conversion.rate());
+            result.put("rateUpdatedAt", conversion.rateUpdatedAt());
+            return ResponseEntity.ok(result);
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(message(e.getMessage()));
+        } catch (IllegalStateException e) {
+            return ResponseEntity.status(HttpStatus.BAD_GATEWAY).body(message(e.getMessage()));
+        }
     }
 
     // Tạo giao dịch thanh toán
@@ -48,12 +75,25 @@ public class PaymentController {
             @RequestBody CreatePaymentRequest request,
             HttpServletRequest httpRequest) {
 
-        if (request.getAmount() == null
-        || request.getAmount() != TICKET_PRICE) {
-    return ResponseEntity.badRequest()
-            .body(message("Giá vé là 50.000 đồng/lượt"));
-}
-
+        String currency = request.getCurrency() == null ? "VND" : request.getCurrency().trim();
+        long amountVnd;
+        CurrencyConversionService.Conversion conversion = null;
+        try {
+            if ("VND".equalsIgnoreCase(currency)) {
+                if (request.getAmount() == null || request.getAmount().compareTo(BigDecimal.valueOf(TICKET_PRICE)) != 0) {
+                    return ResponseEntity.badRequest().body(message("Giá vé là 50.000 đồng/lượt"));
+                }
+                amountVnd = TICKET_PRICE;
+            } else {
+                conversion = currencyConversionService.convert(request.getAmount(), currency);
+                amountVnd = conversion.amountVnd().longValueExact();
+                if (amountVnd < TICKET_PRICE) return ResponseEntity.badRequest().body(message("Số tiền sau quy đổi phải đủ 50.000 đồng/lượt"));
+            }
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(message(e.getMessage()));
+        } catch (IllegalStateException | ArithmeticException e) {
+            return ResponseEntity.status(HttpStatus.BAD_GATEWAY).body(message(e.getMessage()));
+        }
         String method = request.getMethod() == null
                 ? "" : request.getMethod().trim().toUpperCase(java.util.Locale.ROOT);
 
@@ -75,7 +115,12 @@ public class PaymentController {
         transaction.setTransactionCode(
                 "TX-" + UUID.randomUUID().toString()
                         .replace("-", "").substring(0, 12).toUpperCase());
-        transaction.setAmount(TICKET_PRICE);
+        transaction.setAmount(amountVnd);
+        if (conversion != null) {
+            transaction.setCurrency(conversion.currency());
+            transaction.setForeignAmount(conversion.foreignAmount());
+            transaction.setExchangeRate(conversion.rate());
+        }
         transaction.setMethod(method);
         transaction.setLanguage(normalizeLanguage(request.getLanguage()));
         transaction.setSource("qr".equals(request.getSource()) ? "qr" : null);
@@ -103,6 +148,8 @@ public class PaymentController {
         Map<String, Object> response = new HashMap<>();
         response.put("transactionCode", saved.getTransactionCode());
         response.put("amount", saved.getAmount());
+        response.put("currency", saved.getCurrency() == null ? "VND" : saved.getCurrency());
+        if (saved.getForeignAmount() != null) response.put("foreignAmount", saved.getForeignAmount());
         response.put("method", saved.getMethod());
         response.put("status", saved.getStatus());
         response.put("accessGranted", saved.isAccessGranted());
@@ -495,19 +542,27 @@ public class PaymentController {
     }
 
     public static class CreatePaymentRequest {
-        private Long amount;
+        private BigDecimal amount;
+        private String currency;
         private String method;
         private String language;
         private String source;
         private String sessionId;
 
-        public Long getAmount() {
+        public BigDecimal getAmount() {
             return amount;
         }
 
-        public void setAmount(Long amount) {
+        public void setAmount(BigDecimal amount) {
             this.amount = amount;
         }
+
+        public void setAmount(Long amount) {
+            this.amount = amount == null ? null : BigDecimal.valueOf(amount);
+        }
+
+        public String getCurrency() { return currency; }
+        public void setCurrency(String currency) { this.currency = currency; }
 
         public String getMethod() {
             return method;
@@ -540,6 +595,15 @@ public class PaymentController {
         public void setSessionId(String sessionId) {
             this.sessionId = sessionId;
         }
+    }
+
+    public static class ConvertCurrencyRequest {
+        private BigDecimal amount;
+        private String currency;
+        public BigDecimal getAmount() { return amount; }
+        public void setAmount(BigDecimal amount) { this.amount = amount; }
+        public String getCurrency() { return currency; }
+        public void setCurrency(String currency) { this.currency = currency; }
     }
 
     public static class ClaimRequest {
